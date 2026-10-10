@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Divider, Field, Row, Screen, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { addPaymentMethod, setDefaultPayment } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { addPaymentMethod, setDefaultPayment } from '@/services/market';
 import { colors, space } from '@/theme';
 
 export default function Payment() {

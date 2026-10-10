@@ -1,4 +1,4 @@
-import type { AppState, Category, Person } from './types';
+import type { AppState, Category, Person } from '@/domain/types';
 
 // marketAvgPrice simulates a benchmark checked against comparable listings elsewhere
 // (other directories/booking sites for the same category) — an objective reference

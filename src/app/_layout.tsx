@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { AgentFab } from '@/components/AgentFab';
-import { useAppState } from '@/data/hooks';
+import { useAppState } from '@/state/hooks';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});

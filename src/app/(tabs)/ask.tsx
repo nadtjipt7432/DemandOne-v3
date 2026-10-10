@@ -3,8 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, Row, Screen, Txt } from '@/components/base';
-import { useAppState } from '@/data/hooks';
-import { simulateTranscript, startListening } from '@/data/voice';
+import { useAppState } from '@/state/hooks';
+import { simulateTranscript, startListening } from '@/infra/voice';
 import { colors, radius, space } from '@/theme';
 
 const EXAMPLES = [

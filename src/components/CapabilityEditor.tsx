@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Chip, Field, IconButton, Row, Segmented, Txt } from './base';
-import { interpretCapability, WORK_LABEL } from '@/data/intents';
-import { useAppState } from '@/data/hooks';
-import { simulateTranscript, startListening } from '@/data/voice';
+import { interpretCapability, WORK_LABEL } from '@/domain/intents';
+import { useAppState } from '@/state/hooks';
+import { simulateTranscript, startListening } from '@/infra/voice';
 import { colors, space } from '@/theme';
-import type { CapabilityProfile, LocationMode, WorkCategory } from '@/data/types';
+import type { CapabilityProfile, LocationMode, WorkCategory } from '@/domain/types';
 
 const EXAMPLES = [
   "I'm a finance student with experience in financial modeling, valuation, and market research. I can help startups build models or prepare investor materials.",

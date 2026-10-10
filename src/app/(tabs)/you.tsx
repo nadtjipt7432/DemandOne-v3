@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 import { Btn, Divider, Field, Row, Screen, Txt } from '@/components/base';
 import { Avatar } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { CRITERION_META } from '@/data/matching';
-import { addHouseholdMember, resetDemo, setThemeMode } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { CRITERION_META } from '@/domain/matching';
+import { addHouseholdMember, resetDemo, setThemeMode } from '@/services/market';
 import { colors, fontDisplay, radius, space } from '@/theme';
 import type { IconName } from '@/components/base';
-import type { NotificationPref } from '@/data/types';
+import type { NotificationPref } from '@/domain/types';
 
 const NOTIF_LABEL: Record<NotificationPref, string> = {
   live: 'As it happens',

@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Divider, InfoRow, Row, Screen, Txt } from '@/components/base';
 import { Avatar, FitDisclosure, Header, KindTag, StatsRow, TrustBadge, ValueBadge } from '@/components/domain';
-import { useAppState, useFit } from '@/data/hooks';
-import { computeMarketValue, findScheduleConflict } from '@/data/matching';
-import { FEE_DISCLOSURE } from '@/data/pricing';
-import { likeCard, secureCard } from '@/data/service';
+import { useAppState, useFit } from '@/state/hooks';
+import { computeMarketValue, findScheduleConflict } from '@/domain/matching';
+import { FEE_DISCLOSURE } from '@/domain/pricing';
+import { likeCard, secureCard } from '@/services/market';
 import { colors, space } from '@/theme';
 
 export default function CardDetail() {

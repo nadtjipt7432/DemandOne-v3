@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { setNotificationPref } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { setNotificationPref } from '@/services/market';
 import { colors, space } from '@/theme';
-import type { NotificationPref } from '@/data/types';
+import type { NotificationPref } from '@/domain/types';
 
 const OPTIONS: { key: NotificationPref; title: string; sub: string }[] = [
   { key: 'live', title: 'As it happens', sub: "The agent still batches routine news, but breaks through for what's expiring." },

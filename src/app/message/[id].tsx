@@ -5,9 +5,9 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Field, IconButton, Row, Txt } from '@/components/base';
 import { Avatar, Header } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { sendBookingMessage } from '@/data/service';
-import { simulateTranscript, startListening } from '@/data/voice';
+import { useAppState } from '@/state/hooks';
+import { sendBookingMessage } from '@/services/market';
+import { simulateTranscript, startListening } from '@/infra/voice';
 import { colors, radius, space } from '@/theme';
 
 /**

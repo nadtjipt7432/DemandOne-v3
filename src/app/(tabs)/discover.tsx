@@ -4,14 +4,14 @@ import { Dimensions, Pressable, ScrollView, View } from 'react-native';
 import { Chip, Divider, Row, Screen, Segmented, Txt } from '@/components/base';
 import { Avatar, DiscoveryTag, FitDisclosure, TrustBadge, ValueBadge } from '@/components/domain';
 import { MarketField } from '@/components/MarketField';
-import { useAppState, useFit } from '@/data/hooks';
-import { inferWorkCategories, WORK_LABEL } from '@/data/intents';
-import { computeFit, computeMarketValue, passesHardConstraints, timeBucket, TIME_LABEL } from '@/data/matching';
-import { likeCard, passCard } from '@/data/service';
+import { useAppState, useFit } from '@/state/hooks';
+import { inferWorkCategories, WORK_LABEL } from '@/domain/intents';
+import { computeFit, computeMarketValue, passesHardConstraints, timeBucket, TIME_LABEL } from '@/domain/matching';
+import { likeCard, passCard } from '@/services/market';
 import { colors, fontDisplay, space } from '@/theme';
-import type { MatchCard } from '@/data/types';
-import type { WorkCategory } from '@/data/intents';
-import type { TimeBucket } from '@/data/matching';
+import type { MatchCard } from '@/domain/types';
+import type { WorkCategory } from '@/domain/intents';
+import type { TimeBucket } from '@/domain/matching';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 

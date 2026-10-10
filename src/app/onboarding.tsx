@@ -3,10 +3,10 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Divider, Row, Screen, Txt } from '@/components/base';
-import { CRITERION_META } from '@/data/matching';
-import { completeOnboarding } from '@/data/service';
+import { CRITERION_META } from '@/domain/matching';
+import { completeOnboarding } from '@/services/market';
 import { colors, fontDisplay, space } from '@/theme';
-import type { Criterion } from '@/data/types';
+import type { Criterion } from '@/domain/types';
 
 const CRITERIA: { key: Criterion; title: string; sub: string }[] = (
   ['expertise', 'trust', 'budget', 'geography'] as Criterion[]

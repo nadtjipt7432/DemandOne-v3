@@ -5,7 +5,7 @@ import { Btn, Screen, Txt } from '@/components/base';
 import { Logomark } from '@/components/domain';
 import { IntroAnimation } from '@/components/IntroAnimation';
 import { MarketField } from '@/components/MarketField';
-import { useAppState } from '@/data/hooks';
+import { useAppState } from '@/state/hooks';
 import { colors, fontDisplay, fontDisplayItalic, space } from '@/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');

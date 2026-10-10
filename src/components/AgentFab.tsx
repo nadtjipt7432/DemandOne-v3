@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { usePathname, useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppState } from '@/data/hooks';
+import { useAppState } from '@/state/hooks';
 import { colors, radius } from '@/theme';
 
 /**

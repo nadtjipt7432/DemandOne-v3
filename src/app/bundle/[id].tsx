@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Row, Screen, Txt } from '@/components/base';
 import { Header, StatusDot } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { joinBundle } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { joinBundle } from '@/services/market';
 import { colors, radius, space } from '@/theme';
 
 export default function BundleScreen() {

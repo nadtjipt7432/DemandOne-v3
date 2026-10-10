@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, Header } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
+import { useAppState } from '@/state/hooks';
 import { colors, space } from '@/theme';
 
 /** Every completed transaction, buyer and seller side — the "past transactions" list. */

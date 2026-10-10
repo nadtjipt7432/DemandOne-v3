@@ -3,12 +3,12 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Btn, Card, Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, Header, TrustBadge } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { computeFit, findScheduleConflict, windowsFit } from '@/data/matching';
-import { FEE_DISCLOSURE } from '@/data/pricing';
-import { keepWatching, likeCard, secureCard } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { computeFit, findScheduleConflict, windowsFit } from '@/domain/matching';
+import { FEE_DISCLOSURE } from '@/domain/pricing';
+import { keepWatching, likeCard, secureCard } from '@/services/market';
 import { colors, radius, space } from '@/theme';
-import type { MatchCard, Person } from '@/data/types';
+import type { MatchCard, Person } from '@/domain/types';
 
 /**
  * The proof layer (§3/§4 of the trust revision): qualification + trust evidence, kept

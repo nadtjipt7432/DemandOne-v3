@@ -10,8 +10,8 @@
  * than rendering an empty module.
  */
 
-import { computeMarketValue, windowsFit } from './matching';
-import type { AppState, Match, MatchCard, Person, TimeWindow } from './types';
+import { computeMarketValue, windowsFit } from '@/domain/matching';
+import type { AppState, Match, MatchCard, Person, TimeWindow } from '@/domain/types';
 
 /* ------------------------------------------------- 1. Decisions waiting for me */
 

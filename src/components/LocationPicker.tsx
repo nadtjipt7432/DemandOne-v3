@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
-import { LOCATIONS } from '@/data/locations';
+import { LOCATIONS } from '@/domain/locations';
 import { colors, radius, space } from '@/theme';
 import { Card, Divider, Row, Txt } from './base';
 

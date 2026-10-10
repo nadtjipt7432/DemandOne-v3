@@ -4,8 +4,8 @@ import { Pressable, View } from 'react-native';
 import { Btn, Field, Row, Screen, Txt } from '@/components/base';
 import { DotScatter, Logomark } from '@/components/domain';
 import { LocationPicker } from '@/components/LocationPicker';
-import { useAppState } from '@/data/hooks';
-import { setIdentity, setLocation } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { setIdentity, setLocation } from '@/services/market';
 import { colors, fontDisplay, radius, space } from '@/theme';
 
 /**

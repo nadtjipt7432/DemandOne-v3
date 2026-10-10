@@ -4,12 +4,12 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Card, Chip, Divider, Field, Row, Screen, Segmented, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { extractQuickFacts, interpretIntent } from '@/data/intents';
-import { CRITERION_LABEL, computeFit } from '@/data/matching';
-import { createFromText, inferMode } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { extractQuickFacts, interpretIntent } from '@/domain/intents';
+import { CRITERION_LABEL, computeFit } from '@/domain/matching';
+import { createFromText, inferMode } from '@/services/market';
 import { colors, radius, space } from '@/theme';
-import type { BuyerAuthority, Capacity, Criterion, Effort, LocationMode, SellerAuthority, TimingType } from '@/data/types';
+import type { BuyerAuthority, Capacity, Criterion, Effort, LocationMode, SellerAuthority, TimingType } from '@/domain/types';
 
 /** Cap how many categories surface at once — "do not overwhelm the user." */
 const MAX_CATEGORIES = 4;

@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Row, Screen, Txt } from '@/components/base';
 import { Avatar, Header, MarketMoment, MatchBadge, Sparkline } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { findScheduleConflict } from '@/data/matching';
-import { acceptMatch, negotiateMatch, negotiateWithFlexibleTiming, raiseMaximum } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { findScheduleConflict } from '@/domain/matching';
+import { acceptMatch, negotiateMatch, negotiateWithFlexibleTiming, raiseMaximum } from '@/services/market';
 import { colors, marketField, radius, space } from '@/theme';
 
 export default function MatchDetail() {

@@ -2,10 +2,10 @@ import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { Screen, Txt } from '@/components/base';
 import { CapabilityEditor } from '@/components/CapabilityEditor';
-import { useAppState } from '@/data/hooks';
-import { setCapabilityProfile } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { setCapabilityProfile } from '@/services/market';
 import { colors, fontDisplay, space } from '@/theme';
-import type { CapabilityProfile } from '@/data/types';
+import type { CapabilityProfile } from '@/domain/types';
 
 /**
  * Capability onboarding — asked once, right after login, before Standard of

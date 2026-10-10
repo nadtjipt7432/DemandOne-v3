@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, Field, IconButton, Row, Txt } from '@/components/base';
-import { simulateTranscript, startListening } from '@/data/voice';
+import { simulateTranscript, startListening } from '@/infra/voice';
 import { colors, radius, space } from '@/theme';
 
 interface Msg {

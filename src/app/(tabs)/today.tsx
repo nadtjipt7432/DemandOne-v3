@@ -5,8 +5,8 @@ import { Pressable, View } from 'react-native';
 import type { ReactNode } from 'react';
 import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, MarketMoment, StatusDot } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { computeFit, computeMarketValue, passesHardConstraints } from '@/data/matching';
+import { useAppState } from '@/state/hooks';
+import { computeFit, computeMarketValue, passesHardConstraints } from '@/domain/matching';
 import {
   getAgentActivity,
   getCapabilityOpportunities,
@@ -15,8 +15,8 @@ import {
   getNetworkRelevance,
   getPortfolio,
   getTimingOpportunities,
-} from '@/data/myMarket';
-import { getCalendarNudge } from '@/data/suggestions';
+} from '@/state/myMarket';
+import { getCalendarNudge } from '@/infra/calendar';
 import { colors, marketField, radius, space } from '@/theme';
 
 const VALUE_BOOST_CAP = 12;

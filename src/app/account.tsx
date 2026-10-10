@@ -6,10 +6,10 @@ import { Btn, Divider, InfoRow, Screen, Txt } from '@/components/base';
 import { CapabilityEditor } from '@/components/CapabilityEditor';
 import { Header } from '@/components/domain';
 import { LocationPicker } from '@/components/LocationPicker';
-import { useAppState } from '@/data/hooks';
-import { setCapabilityProfile, setLocation } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { setCapabilityProfile, setLocation } from '@/services/market';
 import { colors, space } from '@/theme';
-import type { CapabilityProfile } from '@/data/types';
+import type { CapabilityProfile } from '@/domain/types';
 
 export default function Account() {
   const router = useRouter();

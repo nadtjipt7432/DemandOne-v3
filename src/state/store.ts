@@ -1,5 +1,5 @@
-import type { AppState } from './types';
-import { initialState } from './fixtures';
+import type { AppState } from '@/domain/types';
+import { initialState } from '@/infra/seed';
 
 /**
  * Tiny observable store. Reads are reactive via useSyncExternalStore (see hooks.ts);

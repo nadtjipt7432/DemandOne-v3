@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Card, Row, Screen, Txt } from '@/components/base';
 import { Avatar, VerifyPill } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
-import { FEE_DISCLOSURE } from '@/data/pricing';
-import { confirmFulfillment, markDelivered, submitFeedback } from '@/data/service';
+import { useAppState } from '@/state/hooks';
+import { FEE_DISCLOSURE } from '@/domain/pricing';
+import { confirmFulfillment, markDelivered, submitFeedback } from '@/services/market';
 import { colors, fontDisplay, radius, space } from '@/theme';
 
 const STATUS_LABEL = { confirmed: 'Confirmed', live: 'Live', delivered: 'Delivered', complete: 'Cleared' } as const;

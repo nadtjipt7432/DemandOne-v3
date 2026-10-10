@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { ReactNode, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { colors, marketField, radius, space } from '@/theme';
-import type { BookingStatus, CardKind, Fit, MarketValue, MatchStatus, Person, TrustTier } from '@/data/types';
+import type { BookingStatus, CardKind, Fit, MarketValue, MatchStatus, Person, TrustTier } from '@/domain/types';
 import { Btn, Card, IconName, Row, Txt } from './base';
 
 /* ------------------------------------------------------------- Logomark */

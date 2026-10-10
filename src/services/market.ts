@@ -1,4 +1,4 @@
-import { getState, id, resetStore, setState } from './store';
+import { getState, id, resetStore, setState } from '@/state/store';
 import { applyThemeMode } from '@/theme';
 import type {
   Booking,
@@ -16,7 +16,7 @@ import type {
   SellerAuthority,
   TimeWindow,
   TimingSpec,
-} from './types';
+} from '@/domain/types';
 
 /**
  * Service layer — the ONLY write path. Every function here is async and mirrors the

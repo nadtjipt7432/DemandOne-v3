@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Divider, Row, Screen, Segmented, Txt } from '@/components/base';
 import { Avatar, BookingBadge, MatchBadge } from '@/components/domain';
-import { useAppState } from '@/data/hooks';
+import { useAppState } from '@/state/hooks';
 import { colors, space } from '@/theme';
 
 type Seg = 'new' | 'negotiating' | 'booked';

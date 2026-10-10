@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { computeFit } from './matching';
-import { getState, subscribe } from './store';
-import type { AppState, Fit, MatchCard } from './types';
+import { computeFit } from '@/domain/matching';
+import { getState, subscribe } from '@/state/store';
+import type { AppState, Fit, MatchCard } from '@/domain/types';
 
 /**
  * Reactive read of the whole store. Components destructure what they need and
