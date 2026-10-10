@@ -25,6 +25,7 @@ export default function Values() {
     await setStandardOfValue(order);
     setBusy(false);
     if (redoing) router.canGoBack() ? router.back() : router.replace('/you');
+    else router.replace('/today');
   };
 
   return (

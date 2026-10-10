@@ -162,7 +162,7 @@ export default function NegotiationScreen() {
         </View>
       ) : null}
 
-      <Section title="Term sheet" right={<Pressable accessibilityRole="switch" accessibilityState={{ checked: asCounterparty }} accessibilityLabel={`View as ${firstName} (demo)`} onPress={() => setAsCounterparty((v) => !v)}><T v="label" color={colors.forest}>{asCounterparty ? 'View as you' : `View as ${firstName} (demo)`}</T></Pressable>}>
+      <Section title="Term sheet" right={<Pressable accessibilityRole="switch" accessibilityState={{ checked: asCounterparty }} accessibilityLabel={asCounterparty ? 'View as you' : `View as ${firstName} (demo)`} onPress={() => setAsCounterparty((v) => !v)}><T v="label" color={colors.forest}>{asCounterparty ? 'View as you' : `View as ${firstName} (demo)`}</T></Pressable>}>
         <TermSheet rows={termRows(n, shown.mine, shown.theirs)} mineLabel={asCounterparty ? firstName : 'You'} theirsLabel={asCounterparty ? 'You' : firstName} />
         <T v="small" color={colors.inkFaint} style={{ marginTop: space.sm }}>
           {asCounterparty
@@ -186,6 +186,23 @@ export default function NegotiationScreen() {
           <Stack gap={space.sm} style={{ marginTop: space.sm }}>
             {options.map((o) => {
               const fees = computeFees(o.terms.price);
+              if (!o.confirmed) {
+                const label = o.changes.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ') || 'Meet in the middle';
+                return (
+                  <View key={o.id} testID="option-proposal" style={{ paddingVertical: space.md, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.inkFaint }}>
+                    <Row justify="space-between" align="flex-start" gap={space.md}>
+                      <View style={{ flex: 1 }}>
+                        <T v="bodyStrong">{label}</T>
+                        <T v="small" color={!o.withinLimit ? colors.rust : colors.inkDim}>{!o.withinLimit ? `Past your private ${side === 'buyer' ? 'maximum' : 'minimum'}; proposing raises it.` : `Your agent’s proposal. ${firstName} hasn’t seen it.`}</T>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <T v="price">{`${formatMoney(o.terms.price)}${UNIT_SHORT[n.listing.unit]}`}</T>
+                        <Button size="sm" kind="quiet" title={armed === o.id ? 'Tap again' : 'Propose'} label={`Propose ${formatMoney(o.terms.price)} with ${label.toLowerCase()}`} loading={busy === o.id} onPress={() => propose(o)} />
+                      </View>
+                    </Row>
+                  </View>
+                );
+              }
               return (
                 <View key={o.id} testID={o.confirmed ? 'option-confirmed' : 'option-proposal'} style={{ padding: space.md, borderRadius: radius.control, borderWidth: 1, borderStyle: o.confirmed ? 'solid' : 'dashed', borderColor: o.confirmed ? colors.forest : colors.inkFaint, backgroundColor: o.confirmed ? colors.raised : 'transparent', gap: 6 }}>
                   <Row justify="space-between" align="flex-start">

@@ -2,61 +2,65 @@ import { expect, type Page } from '@playwright/test';
 
 export const button = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: typeof name === 'string' });
 
-/** Landing page → the intro animation carries straight into login when it finishes. */
-export async function openLogin(page: Page) {
-  await page.goto('/');
-  await expect(page.getByLabel('Email')).toBeVisible({ timeout: 30_000 });
-}
+export const SCREEN_DIR = process.env.SCREEN_DIR ?? 'test-results/screens';
 
-export async function enterCode(page: Page) {
-  await page.getByLabel('Verification code').fill('123456');
-  await button(page, 'Verify').click();
+export async function shot(page: Page, name: string) {
+  const project = page.viewportSize()!.width < 600 ? 'mobile' : 'desktop';
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SCREEN_DIR}/${project}-${name}.png`, fullPage: true });
 }
 
 export interface NewUser {
   name: string;
   email: string;
-  location?: { country: string; region: string; city: string };
-  capability?: string;
+  location?: string;
+  capabilities?: string;
+  background?: string;
+  links?: string;
 }
 
-/** Full signup through onboarding, ending on Today. */
-export async function signUp(page: Page, user: NewUser) {
-  await openLogin(page);
-  await page.getByLabel('Email').fill(user.email);
+export const JORDAN: NewUser = {
+  name: 'Jordan Lee',
+  email: 'jordan@example.com',
+  location: 'London',
+  capabilities: 'Financial modeling, market research, valuation',
+  background: 'Six years in transaction services',
+  links: 'linkedin.com/in/jordanlee',
+};
+
+/** Landing → login → profile → capability → values → Home. */
+export async function signUp(page: Page, user: NewUser = JORDAN, opts: { screenshots?: boolean } = {}) {
+  await page.goto('/');
+  await expect(button(page, 'Enter with your email')).toBeVisible({ timeout: 30_000 });
+  if (opts.screenshots) await shot(page, '01-landing');
+  await button(page, 'Enter with your email').click();
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(user.email);
   await button(page, 'Continue').click();
-
-  await expect(page.getByText('Create your account.')).toBeVisible();
-  await page.getByLabel('Name', { exact: true }).fill(user.name);
-  if (user.location) {
-    await button(page, 'Choose location').click();
-    await button(page, 'Country').click();
-    await button(page, user.location.country).click();
-    await page.getByRole('button', { name: /^State|^Province|^Region/ }).first().click();
-    await button(page, user.location.region).click();
-    await button(page, 'City').click();
-    await button(page, user.location.city).click();
-  }
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(user.name);
+  if (user.location) await page.getByRole('textbox', { name: 'Location (optional)', exact: true }).fill(user.location);
   await button(page, 'Continue').click();
-  await enterCode(page);
+  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('123456');
+  await button(page, 'Verify').click();
 
-  await expect(page.getByText('What are you good at?')).toBeVisible();
-  if (user.capability) {
-    await page.getByLabel(/Tell DemandOne what you're good at/).fill(user.capability);
-    await button(page, 'Continue').click();
-    await button(page, 'Save').click();
-  } else {
-    await button(page, 'Skip for now').first().click();
-  }
+  await expect(page.getByText('What can you do?')).toBeVisible();
+  if (user.capabilities) await page.getByRole('textbox', { name: 'Capabilities', exact: true }).fill(user.capabilities);
+  if (user.background) await page.getByRole('textbox', { name: 'Professional background (optional)', exact: true }).fill(user.background);
+  if (user.links) await page.getByRole('textbox', { name: 'LinkedIn or proof links (optional)', exact: true }).fill(user.links);
+  if (opts.screenshots) await shot(page, '02-capability');
+  await button(page, 'Save and continue').click();
 
-  await expect(page.getByText('What matters most to you?')).toBeVisible();
-  for (const criterion of ['Trust', 'Expertise', 'Budget', 'Geography']) {
-    await page.getByText(criterion, { exact: true }).last().click();
-  }
-  await button(page, 'Finish setup').click();
+  await expect(page.getByText('What matters most when you choose who to work with?')).toBeVisible();
+  for (const c of ['Expertise', 'Trust', 'Budget', 'Geography']) await button(page, `Rank ${c} next`).click();
+  await button(page, 'Enter the exchange').click();
   await expect(page).toHaveURL(/\/today$/);
 }
 
-export async function openTab(page: Page, name: string) {
-  await page.getByRole('tab', { name }).click();
+export async function tab(page: Page, name: 'Home' | 'Exchange' | 'Speak' | 'Deals' | 'You') {
+  await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+}
+
+/** Open a listing by its title from the Exchange. */
+export async function openListing(page: Page, title: RegExp) {
+  await tab(page, 'Exchange');
+  await page.getByRole('button', { name: new RegExp(`^Offer: .*|^Need: .*`) }).filter({ hasText: title }).first().click();
 }

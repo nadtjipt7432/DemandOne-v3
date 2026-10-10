@@ -43,7 +43,7 @@ function describeDecision(d: Decision, s: AppState, viewerId: string): { headlin
   const b = d.booking;
   const who = first(s.people[b.buyerId === viewerId ? b.sellerId : b.buyerId]?.name);
   const map = {
-    pay: { headline: `Authorize payment for ${b.title.toLowerCase()}.`, detail: `${formatMoney(b.fees.buyerTotal)} held until you confirm the work. Demo payment.`, cta: 'Authorize' },
+    pay: { headline: 'Authorize the payment to start the work.', detail: `${b.title}. ${formatMoney(b.fees.buyerTotal)} is held until you confirm the work. Demo payment.`, cta: 'Authorize' },
     deliver: { headline: `${who} has paid. Deliver when ready.`, detail: `${b.title}, due ${b.deliveryLabel}.`, cta: 'Open transaction' },
     confirm: { headline: `${who} has delivered.`, detail: 'Confirm the work is done to release payment.', cta: 'Confirm' },
     feedback: { headline: `Would you work with ${who} again?`, detail: 'One tap. It updates their verified record.', cta: 'Answer' },

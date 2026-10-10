@@ -9,7 +9,7 @@ import { passCard } from '@/services/market';
 import { acceptListing, activeNegotiationForCard, defaultOwnLimit, startNegotiation, suggestedOpening } from '@/services/negotiation';
 import { useAppState, useViewer } from '@/state/hooks';
 import { Button, Choice, Field, KeyValue, Page, Row, Rule, Section, Stack, T, TopBar } from '@/ui/core';
-import { CapacityBar, evidenceLine, Price, SideLabel } from '@/ui/market';
+import { CapacityBar, capacityText, evidenceLine, Price, SideLabel } from '@/ui/market';
 import { colors, space } from '@/theme';
 import type { DeadlineOption, PaymentOption, ScopeOption, VolumeOption } from '@/domain/types';
 
@@ -83,7 +83,7 @@ export default function Listing() {
         {card.capacity ? (
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
             <CapacityBar capacity={card.capacity} width={88} />
-            <T v="small" color={colors.inkDim}>{`${card.capacity.remaining} of ${card.capacity.total} ${card.capacity.unit} left`}</T>
+            <T v="small" color={colors.inkDim}>{capacityText(card.capacity)}</T>
           </View>
         ) : null}
       </Row>

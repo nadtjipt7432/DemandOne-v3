@@ -12,7 +12,7 @@ import { formatMoney } from '@/domain/money';
 import { UNIT_LABEL } from '@/domain/terms';
 import type { CardKind, ListingCapacity, MatchCard, Person, PriceUnit } from '@/domain/types';
 import { colors, space } from '@/theme';
-import { Button, Row, T, Tap } from './core';
+import { Row, T, Tap } from './core';
 import { Icon } from './Icon';
 
 /* ---------------------------------------------------------------- marks */
@@ -164,6 +164,11 @@ export function evidenceLine(p: Person): string {
  * price and terms, market state and one action. Instruments stay in detail views,
  * except a capacity bar or an ask revision — single facts that changed.
  */
+export function capacityText(c: ListingCapacity): string {
+  const unit = c.unit === 'slots' ? (c.total === 1 ? 'slot' : 'slots') : 'hours';
+  return `${c.remaining} of ${c.total} ${unit} left`;
+}
+
 export function MarketRow({
   card,
   person,
@@ -184,37 +189,43 @@ export function MarketRow({
   onAction?: () => void;
 }) {
   const revision = card.revisions?.[card.revisions.length - 1];
+  const showCapacity = card.capacity && card.capacity.total > 1;
+  const showFor = forYou && stateTone === 'quiet';
   return (
-    <View style={{ paddingVertical: space.md + 2, borderBottomWidth: 1, borderColor: colors.rule }}>
+    <View style={{ paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.rule }}>
       <Tap onPress={onOpen} label={`${card.kind === 'need' ? 'Need' : 'Offer'}: ${card.title}, ${formatMoney(card.price)} ${UNIT_LABEL[card.unit]}`}>
         <Row justify="space-between">
           <SideLabel kind={card.kind} detail={categoryLabel} />
-          <T v="label" color={stateTone === 'live' ? colors.amberText : colors.inkFaint}>{state}</T>
+          <T v="label" color={stateTone === 'live' ? colors.amberText : showFor ? colors.forest : colors.inkFaint}>{showFor ? 'For you' : state}</T>
         </Row>
-        <Row align="flex-start" justify="space-between" gap={space.md} style={{ marginTop: 6 }}>
+        <Row align="flex-start" justify="space-between" gap={space.md} style={{ marginTop: 4 }}>
           <T v="entry" lines={2} style={{ flex: 1 }}>{card.title}</T>
-          <Price amount={card.price} unit={card.unit} caption={`${card.kind === 'offer' ? 'ask' : 'bid'}${card.unit === 'fixed' ? ', fixed' : card.unit === 'hour' ? ' / hour' : ' / sprint'}`} />
+          <Price amount={card.price} caption={`${card.kind === 'offer' ? 'ask' : 'bid'}${card.unit === 'fixed' ? ', fixed' : card.unit === 'hour' ? ' / hour' : ' / sprint'}`} />
         </Row>
-        <Row gap={space.md} style={{ marginTop: 8, flexWrap: 'wrap' }}>
+        <Row gap={space.md} style={{ marginTop: 4, flexWrap: 'wrap', rowGap: 2 }}>
           <Row gap={4}>
             <Icon name="clock" size={13} color={colors.inkFaint} />
             <T v="small" color={colors.inkDim}>{card.timingNote}</T>
           </Row>
-          {card.capacity ? (
+          {showCapacity ? (
             <Row gap={6}>
-              <CapacityBar capacity={card.capacity} width={40} />
-              <T v="small" color={colors.inkDim}>{`${card.capacity.remaining} of ${card.capacity.total} ${card.capacity.unit} left`}</T>
+              <CapacityBar capacity={card.capacity!} width={32} />
+              <T v="small" color={colors.inkDim}>{capacityText(card.capacity!)}</T>
             </Row>
           ) : null}
-          {revision ? <T v="small" color={colors.inkDim}>{`was ${formatMoney(revision.price)}, ${revision.at}`}</T> : null}
+          {revision ? <T v="small" color={colors.inkDim}>{`was ${formatMoney(revision.price)}`}</T> : null}
         </Row>
       </Tap>
-      <Row justify="space-between" gap={space.md} style={{ marginTop: 10 }}>
-        <View style={{ flex: 1 }}>
-          <T v="smallStrong" lines={1}>{person.name}</T>
-          <T v="small" color={colors.inkFaint} lines={1}>{forYou ? `Matches your capabilities. ${evidenceLine(person)}` : evidenceLine(person)}</T>
-        </View>
-        {onAction ? <Button size="sm" kind="secondary" title={card.kind === 'offer' ? 'Bid' : 'Offer'} label={`${card.kind === 'offer' ? 'Bid on' : 'Make an offer on'} ${card.title}`} onPress={onAction} /> : null}
+      <Row justify="space-between" gap={space.md} style={{ marginTop: 6 }}>
+        <T v="small" color={colors.inkFaint} lines={1} style={{ flex: 1 }}>
+          <T v="smallStrong">{person.name}</T>
+          {`  ${person.completedCount === 0 ? 'First transaction' : `${person.completedCount} verified, ${person.recommendCount} recommend`}`}
+        </T>
+        {onAction ? (
+          <Tap onPress={onAction} label={`${card.kind === 'offer' ? 'Bid on' : 'Make an offer on'} ${card.title}`} style={{ paddingVertical: 4, paddingLeft: space.md }}>
+            <T v="smallStrong" color={colors.forest}>{card.kind === 'offer' ? 'Bid' : 'Offer'}</T>
+          </Tap>
+        ) : null}
       </Row>
     </View>
   );

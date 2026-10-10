@@ -287,7 +287,7 @@ async function act(i: Interpretation, ctx: VoiceContext): Promise<AgentReply> {
       const offer = viewer.offers.find((o) => o.capacityHours !== undefined) ?? viewer.offers[0];
       if (!offer) return { text: "You haven't released any capacity yet. Tell me what you can offer." };
       await setOfferCapacity(offer.id, i.hours);
-      return { text: `Updated. ${i.hours} hours are now available on ${offer.title.toLowerCase()}.` };
+      return { text: `Updated. ${i.hours} hours are now available on “${offer.title}”.` };
     }
 
     case 'delivery': {

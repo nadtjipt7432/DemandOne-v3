@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { View, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { field } from '@/theme';
 
 export type Mood = 'listening' | 'searching' | 'negotiating' | 'handled' | 'night';
@@ -66,10 +66,21 @@ export function AmbientField({ mood, height, breathe = false, style }: { mood: M
               <Stop offset="1" stopColor={g.color} stopOpacity={0} />
             </RadialGradient>
           ))}
+          {/* Fade the whole field out toward its bottom edge, so it never ends in a hard line. */}
+          <LinearGradient id={`fade-${mood}`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#fff" stopOpacity={1} />
+            <Stop offset="0.55" stopColor="#fff" stopOpacity={1} />
+            <Stop offset="1" stopColor="#fff" stopOpacity={0} />
+          </LinearGradient>
+          <Mask id={`mask-${mood}`}>
+            <Rect x="0" y="0" width="100%" height="100%" fill={`url(#fade-${mood})`} />
+          </Mask>
         </Defs>
-        {glows.map((_, i) => (
-          <Rect key={i} x="0" y="0" width="100%" height="100%" fill={`url(#${mood}${i})`} />
-        ))}
+        <G mask={height !== undefined ? `url(#mask-${mood})` : undefined}>
+          {glows.map((_, i) => (
+            <Rect key={i} x="0" y="0" width="100%" height="100%" fill={`url(#${mood}${i})`} />
+          ))}
+        </G>
       </Svg>
     </Animated.View>
   );

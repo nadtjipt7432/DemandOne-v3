@@ -139,7 +139,23 @@ export default function Handled() {
         <CircleMark size={84} meet />
       </View>
       <T v="hero" align="center" style={{ marginTop: space.lg }} testID="handled-title">{booking.status === 'complete' ? 'Cleared.' : 'Handled.'}</T>
-      <T v="body" color={colors.inkDim} align="center" style={{ marginTop: space.sm }}>{`${role === 'buyer' ? 'You' : first} and ${role === 'buyer' ? first : 'you'} agreed on ${booking.title.toLowerCase()}.`}</T>
+      <T v="body" color={colors.inkDim} align="center" style={{ marginTop: space.sm }}>{`${role === 'buyer' ? 'You' : first} and ${role === 'buyer' ? first : 'you'} agreed terms on`}</T>
+      <T v="entry" align="center" style={{ marginTop: 2 }}>{booking.title}</T>
+
+      <Section title="Where it stands" ruled>
+        {STEPS.map((step, i) => {
+          const done = i < stepIndex;
+          const current = i === stepIndex;
+          return (
+            <Row key={step.status} gap={space.md} style={{ paddingVertical: 8 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: done ? colors.forest : 'transparent', borderWidth: 1.5, borderColor: done || current ? colors.forest : colors.rule }} />
+              <T v={current ? 'bodyStrong' : 'body'} color={done || current ? colors.ink : colors.inkFaint}>{step.label}</T>
+            </Row>
+          );
+        })}
+        <View style={{ marginTop: space.md }} testID="handled-action">{action}</View>
+        {error ? <T v="small" color={colors.rust} style={{ marginTop: space.sm }}>{error}</T> : null}
+      </Section>
 
       <Section title="Agreed terms" ruled>
         <KeyValue label="Price" value={`${formatMoney(price)}${unit}`} />
@@ -175,23 +191,8 @@ export default function Handled() {
         {booking.payment ? <T v="small" color={colors.inkFaint} style={{ marginTop: space.xs }}>{`Payment: ${booking.payment.methodLabel}. Demo — no money moves.`}</T> : null}
       </Section>
 
-      <Section title="Where it stands" ruled>
-        {STEPS.map((step, i) => {
-          const done = i < stepIndex;
-          const current = i === stepIndex;
-          return (
-            <Row key={step.status} gap={space.md} style={{ paddingVertical: 8 }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: done ? colors.forest : 'transparent', borderWidth: 1.5, borderColor: done || current ? colors.forest : colors.rule }} />
-              <T v={current ? 'bodyStrong' : 'body'} color={done || current ? colors.ink : colors.inkFaint}>{step.label}</T>
-            </Row>
-          );
-        })}
-        <View style={{ marginTop: space.md }} testID="handled-action">{action}</View>
-        {error ? <T v="small" color={colors.rust} style={{ marginTop: space.sm }}>{error}</T> : null}
-      </Section>
-
       {related.length > 0 ? (
-        <Section title="Often needed next" note={`Related to ${booking.title.toLowerCase()}.`} ruled>
+        <Section title="Often needed next" note={`Services that often follow ${s.categories.find((c) => c.id === booking.category)?.label.toLowerCase() ?? 'this'}.`} ruled>
           {related.map((card) => (
             <MarketRow key={card.id} card={card} person={s.people[card.personId]} categoryLabel={s.categories.find((c) => c.id === card.category)?.label ?? ''} state="Open" onOpen={() => router.push({ pathname: '/listing/[id]', params: { id: card.id } })} />
           ))}

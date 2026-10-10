@@ -10,7 +10,7 @@
  */
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { formatMoney } from '@/domain/money';
 import { missingFields, type MandateDraft } from '@/domain/semantic';
@@ -161,14 +161,17 @@ export function VoicePanel({ context = { kind: 'none' }, variant = 'full', promp
     </Row>
   ) : null;
 
-  const examples = prompts.length ? (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>
-      {prompts.map((p) => (
+  const chips = prompts.map((p) => (
         <Pressable key={p} accessibilityRole="button" accessibilityLabel={`Say: ${p}`} onPress={() => send(p)} style={({ pressed }) => [{ paddingHorizontal: space.md, paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.rule }, pressed && { opacity: 0.6 }]}>
           <T v="small" color={colors.inkDim} lines={1}>{`“${p}”`}</T>
         </Pressable>
-      ))}
-    </View>
+  ));
+  const examples = prompts.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>{chips}</View> : null;
+  // Docked, examples stay on one scrollable line and step aside once the conversation starts.
+  const dockExamples = prompts.length && session.turns.length === 0 ? (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.sm }} contentContainerStyle={{ gap: space.sm }}>
+      {chips}
+    </ScrollView>
   ) : null;
 
   if (variant === 'dock') {
@@ -181,7 +184,7 @@ export function VoicePanel({ context = { kind: 'none' }, variant = 'full', promp
           {input}
         </Row>
         {pending}
-        {examples}
+        {dockExamples}
       </View>
     );
   }

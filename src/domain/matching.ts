@@ -32,7 +32,7 @@ const CRITERION_LABEL: Record<Criterion, string> = {
  */
 export const CRITERION_META: Record<Criterion, { title: string; sub: string }> = {
   expertise: { title: 'Expertise', sub: 'Relevant experience and capability' },
-  trust: { title: 'Trust', sub: 'Verified work · recommendations · people you know' },
+  trust: { title: 'Trust', sub: 'Verified work, recommendations, people you know' },
   budget: { title: 'Budget', sub: 'Your economic comfort zone' },
   geography: { title: 'Geography', sub: 'Where the work happens' },
 };
