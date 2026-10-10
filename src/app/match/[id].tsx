@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Row, Screen, Txt } from '@/components/base';
 import { Avatar, Header, MarketMoment, MatchBadge, Sparkline } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { findScheduleConflict } from '@/domain/matching';
 import { acceptMatch, negotiateMatch, negotiateWithFlexibleTiming, raiseMaximum } from '@/services/market';
 import { colors, marketField, radius, space } from '@/theme';
@@ -11,9 +11,9 @@ import { colors, marketField, radius, space } from '@/theme';
 export default function MatchDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { matches, people, cards, categories, bookings, viewerId } = useAppState();
+  const { matches, people, cards, categories, bookings } = useAppState();
   const match = matches[id];
-  const viewer = people[viewerId];
+  const viewer = useViewer();
   const [busy, setBusy] = useState<string | null>(null);
 
   if (!match) {

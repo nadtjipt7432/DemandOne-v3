@@ -1,5 +1,6 @@
 /**
- * Domain types for DemandOne v2.
+ * Domain types for DemandOne V3 (Phase 1: identity/persistence; market types carried
+ * over from V2 until the Phase 2 mandate/deal model replaces them).
  *
  * The product idea: everyone is both buyer and seller (one `Person`, two symmetric
  * lists — `needs` and `offers`). The Exchange is a ranked, scrollable directory — not
@@ -152,8 +153,6 @@ export interface Reference {
 export interface Person {
   id: string;
   name: string;
-  /** Only ever set/read for the viewer — NPCs never log in, so they never have one. */
-  email?: string;
   initials: string;
   location: string;
   tier: TrustTier;
@@ -212,7 +211,6 @@ export interface MatchCard {
   window: TimeWindow;
   distanceMi: number;
   urgencyNote?: string; // narrated only, e.g. "2 spots left" — never a raw delta
-  bundleId?: string;
   /** Internal-only ranking/pricing pressure. Never rendered. -1..1 */
   liquiditySignal: number;
   /** Basic clearing rule (PRD: "provider floor... fixed vs negotiable... permitted concessions"). */
@@ -273,33 +271,12 @@ export interface Booking {
   status: BookingStatus;
   role: BookingRole;
   category?: string; // for the seller-side "earned above typical rate" callout
-  /** Structured, so a new booking can be checked against it for a schedule conflict. Bundle joins don't have one. */
+  /** Structured, so a new booking can be checked against it for a schedule conflict. */
   window?: TimeWindow;
   savedAmount?: number;
   verifiedLine: string;
   /** Set once post-transaction feedback (submitFeedback) has run — guards against resubmitting. */
   feedbackGiven?: boolean;
-  /** A direct thread with this booking's counterpart — separate from the agent chat (see message/[id].tsx). Reuses MatchMessage's shape. */
-  messages?: MatchMessage[];
-}
-
-export interface BundleSlot {
-  label: string;
-  value: string;
-  sub: string;
-}
-
-export interface Bundle {
-  id: string;
-  personName: string;
-  when: string;
-  slots: BundleSlot[];
-  confirmedCount: number;
-  totalCount: number;
-  yourPrice: number;
-  originalPrice: number;
-  savedEach: number;
-  steps: string[];
 }
 
 export interface Permission {
@@ -309,11 +286,6 @@ export interface Permission {
   enabled: boolean;
 }
 
-export interface HouseholdMember {
-  name: string;
-  initials: string;
-}
-
 export type NotificationPref = 'live' | 'daily' | 'weekly' | 'off';
 
 export interface PaymentMethod {
@@ -321,19 +293,33 @@ export interface PaymentMethod {
   label: string; // e.g. "Visa ending 6411"
 }
 
+/** Where a signed-in account is in onboarding. Each step writes into the real profile. */
+export type OnboardingStep = 'capability' | 'values' | 'done';
+
+/**
+ * The one local account on this device (the mock backend is single-device). Kept
+ * when signed out, so signing back in with the same email restores everything.
+ * `personId` points at the account's public profile in `people`.
+ */
+export interface DeviceAccount {
+  personId: string;
+  email: string;
+  onboarding: OnboardingStep;
+  createdAt: string;
+}
+
 export interface AppState {
-  viewerId: string;
-  onboarded: boolean;
-  household: HouseholdMember[];
+  account: DeviceAccount | null;
+  signedIn: boolean;
   themeMode: 'light' | 'dark';
   notificationPref: NotificationPref;
   paymentMethods: PaymentMethod[];
-  defaultPaymentId: string;
+  defaultPaymentId?: string;
   people: Record<string, Person>;
   cards: MatchCard[];
   matches: Record<string, Match>;
   bookings: Booking[];
-  bundles: Record<string, Bundle>;
   permissions: Permission[];
+  /** Static reference data — always taken from the seed, never from storage. */
   categories: Category[];
 }

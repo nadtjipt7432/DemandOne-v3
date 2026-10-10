@@ -6,15 +6,15 @@ import { Btn, Divider, InfoRow, Screen, Txt } from '@/components/base';
 import { CapabilityEditor } from '@/components/CapabilityEditor';
 import { Header } from '@/components/domain';
 import { LocationPicker } from '@/components/LocationPicker';
-import { useAppState } from '@/state/hooks';
-import { setCapabilityProfile, setLocation } from '@/services/market';
+import { useAppState, useViewer } from '@/state/hooks';
+import { setCapabilityProfile, setLocation, signOut } from '@/services/account';
 import { colors, space } from '@/theme';
 import type { CapabilityProfile } from '@/domain/types';
 
 export default function Account() {
   const router = useRouter();
-  const { people, viewerId } = useAppState();
-  const viewer = people[viewerId];
+  const { account } = useAppState();
+  const viewer = useViewer();
   const [editingLocation, setEditingLocation] = useState(false);
   const [editingCapability, setEditingCapability] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,7 +38,7 @@ export default function Account() {
       <View style={{ marginTop: space.lg }}>
         <InfoRow icon="user" label={viewer.name} value="Name" />
         <Divider />
-        <InfoRow icon="mail" label={viewer.email ?? 'Not set'} value="Email" />
+        <InfoRow icon="mail" label={account?.email ?? ''} value="Email" />
         <Divider />
         {editingLocation ? (
           <View style={{ paddingVertical: space.md, gap: space.sm }}>
@@ -57,7 +57,7 @@ export default function Account() {
         ) : (
           <InfoRow
             icon="map-pin"
-            label={viewer.location}
+            label={viewer.location || 'Not set'}
             value="Location"
             right={<Feather name="chevron-right" size={16} color={colors.textFaint} />}
             onPress={() => setEditingLocation(true)}
@@ -87,7 +87,10 @@ export default function Account() {
         Your data is not inventory. Never sold, never used for advertising.
       </Txt>
 
-      <Btn title="Sign out" variant="ghost" style={{ marginTop: space.xl }} onPress={() => router.replace('/')} />
+      <Btn title="Sign out" variant="ghost" style={{ marginTop: space.xl }} onPress={signOut} />
+      <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
+        Your account stays on this device — sign back in with {account?.email}.
+      </Txt>
     </Screen>
   );
 }

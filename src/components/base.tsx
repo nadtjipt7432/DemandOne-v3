@@ -154,6 +154,9 @@ export function Btn({
   const border = variant === 'secondary' ? colors.borderStrong : 'transparent';
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
@@ -267,13 +270,19 @@ export function Field({
   placeholder,
   multiline = false,
   keyboardType,
+  autoCapitalize,
+  accessibilityLabel,
+  onSubmitEditing,
   style,
 }: {
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
   multiline?: boolean;
-  keyboardType?: 'default' | 'number-pad' | 'decimal-pad';
+  keyboardType?: 'default' | 'number-pad' | 'decimal-pad' | 'email-address';
+  autoCapitalize?: 'none' | 'sentences' | 'words';
+  accessibilityLabel?: string;
+  onSubmitEditing?: () => void;
   style?: StyleProp<TextStyle>;
 }) {
   const styles = getStyles();
@@ -285,6 +294,9 @@ export function Field({
       placeholderTextColor={colors.textFaint}
       multiline={multiline}
       keyboardType={keyboardType}
+      autoCapitalize={autoCapitalize}
+      accessibilityLabel={accessibilityLabel ?? placeholder}
+      onSubmitEditing={onSubmitEditing}
       style={[
         styles.field,
         multiline && { minHeight: 96, textAlignVertical: 'top' },

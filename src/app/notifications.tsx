@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
 import { useAppState } from '@/state/hooks';
-import { setNotificationPref } from '@/services/market';
+import { setNotificationPref } from '@/services/account';
 import { colors, space } from '@/theme';
 import type { NotificationPref } from '@/domain/types';
 

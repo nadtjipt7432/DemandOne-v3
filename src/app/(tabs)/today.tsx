@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import type { ReactNode } from 'react';
 import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, MarketMoment, StatusDot } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { computeFit, computeMarketValue, passesHardConstraints } from '@/domain/matching';
 import {
   getAgentActivity,
@@ -29,8 +29,8 @@ const VALUE_BOOST_CAP = 12;
  */
 export default function Today() {
   const router = useRouter();
-  const { people, viewerId, cards, matches, categories } = useAppState();
-  const viewer = people[viewerId];
+  const { people, cards, matches, categories } = useAppState();
+  const viewer = useViewer();
   const categoryById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c])), [categories]);
 
   const decisions = useMemo(() => getDecisions(matches, people, viewer), [matches, people, viewer]);
@@ -80,7 +80,7 @@ export default function Today() {
     <Screen scroll>
       <Row style={{ justifyContent: 'space-between', marginTop: space.sm }}>
         <Txt variant="small" color={colors.textFaint}>
-          {viewer.location.split(',')[0]}
+          {viewer.location.split(',')[0] || viewer.name.split(' ')[0]}
         </Txt>
         <Avatar initials={viewer.initials} size={36} />
       </Row>

@@ -60,6 +60,9 @@ export function TabBar({ state, navigation }: TabBarProps) {
           return (
             <Pressable
               key={route.key}
+              accessibilityRole="tab"
+              accessibilityLabel="Ask"
+              accessibilityState={{ selected: focused }}
               onPress={() => navigation.navigate(route.name, { autoListen: 'true' })}
               style={({ pressed }) => [{ flex: 1, alignItems: 'center' }, pressed && { opacity: 0.7 }]}>
               <View
@@ -83,6 +86,9 @@ export function TabBar({ state, navigation }: TabBarProps) {
         return (
           <Pressable
             key={route.key}
+            accessibilityRole="tab"
+            accessibilityLabel={LABELS[route.name]}
+            accessibilityState={{ selected: focused }}
             onPress={() => navigation.navigate(route.name)}
             style={({ pressed }) => [
               { flex: 1, alignItems: 'center', gap: 5 },

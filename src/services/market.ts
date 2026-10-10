@@ -1,17 +1,15 @@
-import { getState, id, resetStore, setState } from '@/state/store';
-import { applyThemeMode } from '@/theme';
+import { delay } from '@/infra/clock';
+import { getState, id, setState } from '@/state/store';
+import { updateViewer, viewerOf } from './viewer';
 import type {
   Booking,
   BuyerAuthority,
   Capacity,
-  CapabilityProfile,
   Criterion,
   Effort,
-  HouseholdMember,
   LocationMode,
   Match,
   Need,
-  NotificationPref,
   Offer,
   SellerAuthority,
   TimeWindow,
@@ -19,28 +17,10 @@ import type {
 } from '@/domain/types';
 
 /**
- * Service layer — the ONLY write path. Every function here is async and mirrors the
- * shape of a Convex mutation/query. Screens never touch the store directly for writes.
- * To move to Convex: replace each body with a `useMutation`/`useQuery` call of the same name.
+ * Market services (V2 engine, replaced by the Phase 2 mandate/deal engine). With
+ * services/account.ts, the ONLY write path: every function is async and shaped like
+ * a backend mutation; screens never write to the store directly.
  */
-
-const delay = (ms = 220) => new Promise((r) => setTimeout(r, ms));
-
-/** Onboarding: commit the Standard of Value ranking quiz. */
-export async function completeOnboarding(order: Criterion[]): Promise<void> {
-  await delay(300);
-  setState((s) => {
-    const viewer = s.people[s.viewerId];
-    return {
-      ...s,
-      onboarded: true,
-      people: {
-        ...s.people,
-        [s.viewerId]: { ...viewer, standardOfValue: { order } },
-      },
-    };
-  });
-}
 
 /**
  * One open input, no upfront side to pick — the agent routes it. A real system would
@@ -89,12 +69,12 @@ export async function createFromText(input: AskInput): Promise<string> {
   const newId = id(input.mode === 'need' ? 'n' : 'o');
   const timing = input.timing ?? DEFAULT_TIMING;
   setState((s) => {
-    const viewer = s.people[s.viewerId];
+    const viewer = viewerOf(s);
     const category = input.category ?? viewer.categories[0] ?? 'advisory';
     if (input.mode === 'need') {
       const need: Need = {
         id: newId,
-        personId: s.viewerId,
+        personId: viewer.id,
         category,
         title: input.text,
         description: `Your agent turned "${input.text}" into a structured need.`,
@@ -110,11 +90,11 @@ export async function createFromText(input: AskInput): Promise<string> {
         authority: (input.authority as BuyerAuthority) ?? 'within-range',
         priorities: input.priorities ?? [],
       };
-      return { ...s, people: { ...s.people, [s.viewerId]: { ...viewer, needs: [need, ...viewer.needs] } } };
+      return updateViewer(s, (v) => ({ ...v, needs: [need, ...v.needs] }));
     }
     const offer: Offer = {
       id: newId,
-      personId: s.viewerId,
+      personId: viewer.id,
       category,
       title: input.text,
       description: `Your agent turned "${input.text}" into a structured offer.`,
@@ -131,7 +111,7 @@ export async function createFromText(input: AskInput): Promise<string> {
       priorities: input.priorities ?? [],
       fitNote: input.fitNote,
     };
-    return { ...s, people: { ...s.people, [s.viewerId]: { ...viewer, offers: [offer, ...viewer.offers] } } };
+    return updateViewer(s, (v) => ({ ...v, offers: [offer, ...v.offers] }));
   });
   return newId;
 }
@@ -139,31 +119,13 @@ export async function createFromText(input: AskInput): Promise<string> {
 /** Fallback when nothing recommended clears the bar: keep watching until the market lines up. */
 export async function keepWatching(mode: 'need' | 'offer', targetId: string): Promise<void> {
   await delay(200);
-  setState((s) => {
-    const viewer = s.people[s.viewerId];
-    if (mode === 'need') {
-      return {
-        ...s,
-        people: {
-          ...s.people,
-          [s.viewerId]: {
-            ...viewer,
-            needs: viewer.needs.map((n) => (n.id === targetId ? { ...n, howLong: 'watching' } : n)),
-          },
-        },
-      };
-    }
-    return {
-      ...s,
-      people: {
-        ...s.people,
-        [s.viewerId]: {
-          ...viewer,
-          offers: viewer.offers.map((o) => (o.id === targetId ? { ...o, howLong: 'watching' } : o)),
-        },
-      },
-    };
-  });
+  setState((s) =>
+    updateViewer(s, (v) =>
+      mode === 'need'
+        ? { ...v, needs: v.needs.map((n) => (n.id === targetId ? { ...n, howLong: 'watching' } : n)) }
+        : { ...v, offers: v.offers.map((o) => (o.id === targetId ? { ...o, howLong: 'watching' } : o)) }
+    )
+  );
 }
 
 /** Express interest: the card's person is notified and responds — ready to talk price or book. */
@@ -333,11 +295,12 @@ export async function negotiateWithFlexibleTiming(matchId: string): Promise<void
  */
 export async function raiseMaximum(category: string, newMax: number): Promise<void> {
   await delay(250);
-  setState((s) => {
-    const viewer = s.people[s.viewerId];
-    const needs = viewer.needs.map((n) => (n.category === category ? { ...n, budgetMax: Math.max(n.budgetMax, newMax) } : n));
-    return { ...s, people: { ...s.people, [s.viewerId]: { ...viewer, needs } } };
-  });
+  setState((s) =>
+    updateViewer(s, (v) => ({
+      ...v,
+      needs: v.needs.map((n) => (n.category === category ? { ...n, budgetMax: Math.max(n.budgetMax, newMax) } : n)),
+    }))
+  );
 }
 
 function addBooking(
@@ -409,35 +372,6 @@ export async function secureCard(cardId: string, priceOverride?: number): Promis
   return bookingId;
 }
 
-/** Join a shared route/bundle slot at the lower price. Returns bookingId. */
-export async function joinBundle(bundleId: string): Promise<string> {
-  await delay();
-  let bookingId = '';
-  setState((s) => {
-    const bundle = s.bundles[bundleId];
-    if (!bundle) return s;
-    const res = addBooking(s, {
-      personId: 'victor',
-      service: `${bundle.personName.split(' · ')[0]} · bundled engagement`,
-      when: bundle.when,
-      distanceMi: 0,
-      role: 'buyer',
-      price: bundle.yourPrice,
-      savedAmount: bundle.savedEach,
-      verifiedLine: 'Identity + insurance verified',
-    });
-    bookingId = res.bookingId;
-    return {
-      ...res.state,
-      bundles: {
-        ...res.state.bundles,
-        [bundleId]: { ...bundle, confirmedCount: Math.min(bundle.totalCount, bundle.confirmedCount + 1) },
-      },
-    };
-  });
-  return bookingId;
-}
-
 /** Seller action: the work is ready. Never releases payment on its own — see confirmFulfillment. */
 export async function markDelivered(bookingId: string): Promise<void> {
   await delay(300);
@@ -483,114 +417,4 @@ export async function submitFeedback(bookingId: string, recommends: boolean): Pr
       bookings: s.bookings.map((b) => (b.id === bookingId ? { ...b, feedbackGiven: true } : b)),
     };
   });
-}
-
-export async function togglePermission(key: string): Promise<void> {
-  setState((s) => ({
-    ...s,
-    permissions: s.permissions.map((p) => (p.key === key ? { ...p, enabled: !p.enabled } : p)),
-  }));
-}
-
-export async function setNotificationPref(pref: NotificationPref): Promise<void> {
-  await delay(150);
-  setState((s) => ({ ...s, notificationPref: pref }));
-}
-
-/**
- * Mutates the shared `colors` object *before* triggering the store update, so every
- * screen's re-render (they all subscribe via useAppState) already sees the new
- * palette — doing this the other way round (e.g. from a useEffect reacting to the
- * state change) would paint one frame behind, since mutating a plain object doesn't
- * itself cause React to re-render anything.
- */
-export async function setThemeMode(mode: 'light' | 'dark'): Promise<void> {
-  applyThemeMode(mode);
-  setState((s) => ({ ...s, themeMode: mode }));
-}
-
-export async function setDefaultPayment(paymentId: string): Promise<void> {
-  await delay(150);
-  setState((s) => ({ ...s, defaultPaymentId: paymentId }));
-}
-
-export async function addPaymentMethod(label: string): Promise<void> {
-  await delay(300);
-  const paymentId = id('pm');
-  setState((s) => ({
-    ...s,
-    paymentMethods: [...s.paymentMethods, { id: paymentId, label }],
-    defaultPaymentId: paymentId,
-  }));
-}
-
-/** The viewer sets or edits where they're based — asked at login, editable later from Account. */
-export async function setLocation(location: string): Promise<void> {
-  await delay(150);
-  setState((s) => ({
-    ...s,
-    people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], location } },
-  }));
-}
-
-/** What login actually captures becomes the real identity — not thrown away after Verify. */
-export async function setIdentity(name: string, email: string): Promise<void> {
-  await delay(150);
-  setState((s) => ({
-    ...s,
-    people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], name, email } },
-  }));
-}
-
-/** Set at capability onboarding, or edited later from Account — see CapabilityProfile's doc comment. */
-export async function setCapabilityProfile(profile: CapabilityProfile): Promise<void> {
-  await delay(250);
-  setState((s) => ({
-    ...s,
-    people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], capability: profile } },
-  }));
-}
-
-export async function addHouseholdMember(name: string): Promise<void> {
-  await delay(250);
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0]?.toUpperCase())
-    .slice(0, 2)
-    .join('');
-  const member: HouseholdMember = { name: name.trim(), initials: initials || '?' };
-  setState((s) => ({ ...s, household: [...s.household, member] }));
-}
-
-const AUTO_REPLIES = [
-  "Got it — I'll follow up here.",
-  "Sounds good, thanks for the update.",
-  "Noted. I'll keep you posted on my end.",
-];
-
-/**
- * A direct thread with the booking's counterpart — distinct from the agent chat
- * (`/agent`). Mocked the same way as everything else here: no real messaging
- * backend, just a deterministic canned reply after a short delay, so the
- * interaction still feels real rather than being a dead input.
- */
-export async function sendBookingMessage(bookingId: string, text: string): Promise<void> {
-  const you: Match['timeline'][number] = { from: 'you', text };
-  setState((s) => ({
-    ...s,
-    bookings: s.bookings.map((b) => (b.id === bookingId ? { ...b, messages: [...(b.messages ?? []), you] } : b)),
-  }));
-  await delay(500);
-  const reply = AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)];
-  setState((s) => ({
-    ...s,
-    bookings: s.bookings.map((b) => (b.id === bookingId ? { ...b, messages: [...(b.messages ?? []), { from: 'them', text: reply }] } : b)),
-  }));
-}
-
-/** Wipes any persisted demo state and restores the seeded starting scenario. */
-export async function resetDemo(): Promise<void> {
-  await delay(300);
-  resetStore();
 }

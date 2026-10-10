@@ -1,9 +1,7 @@
-import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { Screen, Txt } from '@/components/base';
 import { CapabilityEditor } from '@/components/CapabilityEditor';
-import { useAppState } from '@/state/hooks';
-import { setCapabilityProfile } from '@/services/market';
+import { setCapabilityProfile, skipCapability } from '@/services/account';
 import { colors, fontDisplay, space } from '@/theme';
 import type { CapabilityProfile } from '@/domain/types';
 
@@ -15,15 +13,8 @@ import type { CapabilityProfile } from '@/domain/types';
  * has nothing to offer shouldn't be blocked from entering the market.
  */
 export default function Capability() {
-  const router = useRouter();
-  const { onboarded } = useAppState();
-
-  const continueOn = () => router.replace(onboarded ? '/today' : '/onboarding');
-
-  const onSave = async (profile: CapabilityProfile) => {
-    await setCapabilityProfile(profile);
-    continueOn();
-  };
+  // Both actions advance the onboarding step; the route guard moves on to the next screen.
+  const onSave = (profile: CapabilityProfile) => setCapabilityProfile(profile);
 
   return (
     <Screen scroll>
@@ -35,7 +26,7 @@ export default function Capability() {
       </Txt>
 
       <View style={{ marginTop: space.xl }}>
-        <CapabilityEditor onSave={onSave} onSkip={continueOn} />
+        <CapabilityEditor onSave={onSave} onSkip={skipCapability} />
       </View>
     </Screen>
   );

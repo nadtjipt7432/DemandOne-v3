@@ -16,14 +16,12 @@ const HERO_HEIGHT = Math.min(140, Math.round(SCREEN_HEIGHT * 0.18));
 
 export default function Welcome() {
   const router = useRouter();
-  const { people, bookings } = useAppState();
+  const { cards } = useAppState();
   const [showIntro, setShowIntro] = useState(true);
 
-  // One restrained live-market line, not invented copy — this is the same
-  // "quantified, not fluff" rule the rest of the app follows.
-  const totalNeeds = Object.values(people).reduce((sum, p) => sum + p.needs.length, 0);
-  const totalOffers = Object.values(people).reduce((sum, p) => sum + p.offers.length, 0);
-  const clearedCount = bookings.filter((b) => b.status === 'complete').length;
+  // One restrained live-market line, counted from the actual open listings.
+  const openNeeds = cards.filter((c) => c.kind === 'need').length;
+  const openOffers = cards.filter((c) => c.kind === 'offer').length;
 
   return (
     <View style={{ flex: 1 }}>
@@ -57,12 +55,11 @@ export default function Welcome() {
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <View style={{ gap: space.md, marginTop: space.xl }}>
             <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
-              {totalNeeds} Needs · {totalOffers} Offers · {clearedCount} cleared this week
+              {openNeeds} open needs · {openOffers} open offers
             </Txt>
             <Btn title="Enter DemandOne" icon="arrow-right" onPress={() => router.push('/login')} />
-            <Btn title="Sign in" variant="ghost" onPress={() => router.push('/login')} />
             <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
-              You approve every commitment.
+              New or returning — all it takes is your email.{'\n'}You approve every commitment.
             </Txt>
           </View>
         </View>

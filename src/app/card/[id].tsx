@@ -12,7 +12,7 @@ import { colors, space } from '@/theme';
 export default function CardDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { cards, people, bundles, categories, bookings } = useAppState();
+  const { cards, people, categories, bookings } = useAppState();
   const card = cards.find((c) => c.id === id);
   const fit = useFit(card);
   const [busy, setBusy] = useState<string | null>(null);
@@ -30,7 +30,6 @@ export default function CardDetail() {
 
   const person = people[card.personId];
   const tryPrice = card.negotiable ? Math.max(card.floorPrice ?? 1, Math.round(card.price * 0.9)) : card.price;
-  const bundle = card.bundleId ? bundles[card.bundleId] : undefined;
   const value = computeMarketValue(card, categories.find((c) => c.id === card.category));
   const conflict = findScheduleConflict(card.window, bookings);
 
@@ -136,25 +135,6 @@ export default function CardDetail() {
           right={value.isGoodValue ? <ValueBadge value={value} /> : undefined}
         />
       </View>
-
-      {/* Bundle hook */}
-      {bundle ? (
-        <Pressable
-          onPress={() => router.push({ pathname: '/bundle/[id]', params: { id: bundle.id } })}
-          style={({ pressed }) => [{ marginTop: space.lg }, pressed && { opacity: 0.6 }]}>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <View style={{ flex: 1 }}>
-              <Txt variant="bodyStrong">Three nearby people unlock ${bundle.yourPrice}</Txt>
-              <Txt variant="small" color={colors.textFaint} style={{ marginTop: 2 }}>
-                Save ${bundle.savedEach} each · {bundle.confirmedCount} of {bundle.totalCount} confirmed
-              </Txt>
-            </View>
-            <Txt variant="body" color={colors.accent}>
-              View
-            </Txt>
-          </Row>
-        </Pressable>
-      ) : null}
 
       {conflict ? (
         <Row gap={space.sm} style={{ marginTop: space.xl, alignItems: 'flex-start' }}>

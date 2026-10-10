@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Card, Chip, Divider, Field, Row, Screen, Segmented, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { extractQuickFacts, interpretIntent } from '@/domain/intents';
 import { CRITERION_LABEL, computeFit } from '@/domain/matching';
 import { createFromText, inferMode } from '@/services/market';
@@ -107,8 +107,8 @@ function MandateRow({ label, value }: { label: string; value: string }) {
 export default function IntentResults() {
   const router = useRouter();
   const { text } = useLocalSearchParams<{ text: string }>();
-  const { people, viewerId, cards, categories } = useAppState();
-  const viewer = people[viewerId];
+  const { people, cards, categories } = useAppState();
+  const viewer = useViewer();
   const [busy, setBusy] = useState(false);
 
   const mode = useMemo(() => inferMode(text ?? ''), [text]);

@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Chip, Field, Row, Screen, Txt } from '@/components/base';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { simulateTranscript, startListening } from '@/infra/voice';
 import { colors, radius, space } from '@/theme';
 
@@ -19,8 +19,8 @@ const EXAMPLES = [
 export default function Ask() {
   const router = useRouter();
   const { autoListen } = useLocalSearchParams<{ autoListen?: string }>();
-  const { people, viewerId } = useAppState();
-  const viewer = people[viewerId];
+  const { people } = useAppState();
+  const viewer = useViewer();
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
   const stopRef = useRef<{ stop: () => void } | null>(null);

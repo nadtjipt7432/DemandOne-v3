@@ -4,7 +4,7 @@ import { Switch, View } from 'react-native';
 import { Btn, Divider, Row, Screen, Txt } from '@/components/base';
 import { Header } from '@/components/domain';
 import { useAppState } from '@/state/hooks';
-import { togglePermission } from '@/services/market';
+import { togglePermission } from '@/services/account';
 import { colors, space } from '@/theme';
 import type { IconName } from '@/components/base';
 

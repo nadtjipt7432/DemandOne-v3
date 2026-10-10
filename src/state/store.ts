@@ -1,40 +1,61 @@
 import type { AppState } from '@/domain/types';
 import { initialState } from '@/infra/seed';
+import { createMemoryStorage, decodeEnvelope, encodeEnvelope, STORAGE_KEY, type KeyValueStorage } from '@/infra/storage';
 
 /**
  * Tiny observable store. Reads are reactive via useSyncExternalStore (see hooks.ts);
- * writes go through service.ts, which is the seam that becomes Convex mutations later.
+ * writes go through services/, the seam that becomes real backend calls later.
  * getState returns a STABLE reference until setState replaces it, so getSnapshot is cached.
  *
- * Persistence: web-only, feature-detected (same spirit as voice.ts's native-vs-simulated
- * split) — `localStorage` isn't available on native without adding a dependency, so this
- * degrades to in-memory-only there rather than reaching for one. On web, every `setState`
- * writes the new state back; the module loads whatever was last saved, if anything.
+ * Persistence: `hydrateStore()` loads the last saved state (or the seed) once at
+ * startup; every later `setState` queues a write. Writes are chained so they land
+ * in order, and nothing is written before hydration finishes (that would clobber
+ * the saved state with the seed).
  */
 
-const STORAGE_KEY = 'demandone-v2-state';
+let storage: KeyValueStorage = createMemoryStorage();
+let state: AppState = initialState;
+let hydrated = false;
+let writeChain: Promise<void> = Promise.resolve();
+const listeners = new Set<() => void>();
 
-function loadPersisted(): AppState | undefined {
-  try {
-    if (typeof localStorage === 'undefined') return undefined;
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AppState) : undefined;
-  } catch {
-    return undefined;
-  }
+function notify(): void {
+  listeners.forEach((l) => l());
 }
 
 function persist(s: AppState): void {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    // Storage can be full or disabled (private browsing) — the demo still works, just unsaved.
-  }
+  const { categories: _static, ...durable } = s;
+  const raw = encodeEnvelope(durable);
+  writeChain = writeChain
+    .then(() => storage.setItem(STORAGE_KEY, raw))
+    .catch(() => {
+      // Storage full or disabled (e.g. private browsing) — the session still works, just unsaved.
+    });
 }
 
-let state: AppState = loadPersisted() ?? initialState;
-const listeners = new Set<() => void>();
+/** Load persisted state from `adapter` (falls back to the seed). Call once at startup. */
+export async function hydrateStore(adapter: KeyValueStorage): Promise<void> {
+  storage = adapter;
+  let raw: string | null = null;
+  try {
+    raw = await adapter.getItem(STORAGE_KEY);
+  } catch {
+    raw = null;
+  }
+  const saved = decodeEnvelope(raw) as Omit<AppState, 'categories'> | undefined;
+  state = saved ? { ...saved, categories: initialState.categories } : initialState;
+  hydrated = true;
+  notify();
+}
+
+export function isHydrated(): boolean {
+  return hydrated;
+}
+
+/** Resolves once every queued write has reached storage. */
+export function flushWrites(): Promise<void> {
+  return writeChain;
+}
 
 export function getState(): AppState {
   return state;
@@ -42,19 +63,20 @@ export function getState(): AppState {
 
 export function setState(updater: (s: AppState) => AppState): void {
   state = updater(state);
-  persist(state);
-  listeners.forEach((l) => l());
+  if (hydrated) persist(state);
+  notify();
 }
 
-/** Reset Demo: wipe whatever's persisted and go back to the seeded starting scenario. */
-export function resetStore(): void {
+/** Erase everything this device holds and return to the seeded market. */
+export async function resetStore(): Promise<void> {
+  await writeChain;
   try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+    await storage.removeItem(STORAGE_KEY);
   } catch {
-    // Non-fatal — falling through to the in-memory reset below still works.
+    // Non-fatal — the in-memory reset below still works.
   }
   state = initialState;
-  listeners.forEach((l) => l());
+  notify();
 }
 
 export function subscribe(listener: () => void): () => void {

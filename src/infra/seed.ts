@@ -12,91 +12,6 @@ export const categories: Category[] = [
   { id: 'admissions', label: 'College admissions & tutoring', icon: 'book-open', marketAvgPrice: 150 },
 ];
 
-const viewer: Person = {
-  id: 'nadia',
-  name: 'Nadia Putri',
-  initials: 'NP',
-  location: 'Miami, FL',
-  tier: 'everyday',
-  completedCount: 9,
-  recommendCount: 9,
-  trustPaths: 0,
-  verified: { identity: true, insurance: false, references: false },
-  bio: 'Former in-house recruiter. Coaches resumes and LinkedIn positioning on the side.',
-  distanceMi: 0,
-  responseRate: 92,
-  responseTimeLabel: 'usually replies in 30 min',
-  needs: [
-    {
-      id: 'n_nadia_1',
-      personId: 'nadia',
-      category: 'finance',
-      title: 'Financial model reviewed before the board meeting',
-      description: 'Series A model — wants a second set of eyes before it goes to the board.',
-      budgetMax: 900,
-      budgetMin: 500,
-      window: { startHour: 0, endHour: 48, label: 'Within 48 hours' },
-      distanceMax: 50,
-      timing: { type: 'asap', deadlineLabel: 'Within 48 hours', window: { startHour: 0, endHour: 48, label: 'Within 48 hours' } },
-      effort: 'one-time',
-      locationMode: 'remote',
-      authority: 'within-range',
-      priorities: ['expertise', 'budget'],
-    },
-    {
-      id: 'n_nadia_2',
-      personId: 'nadia',
-      category: 'admissions',
-      title: "College essay help for Lyanne before early action",
-      description: 'Personal statement plus two supplements — needs a sharp editor.',
-      budgetMax: 260,
-      budgetMin: 150,
-      window: { startHour: 0, endHour: 96, label: 'This week' },
-      distanceMax: 50,
-      timing: { type: 'window', deadlineLabel: 'This week', window: { startHour: 0, endHour: 96, label: 'This week' } },
-      effort: 'few-hours',
-      locationMode: 'remote',
-      authority: 'within-range',
-      priorities: ['expertise', 'trust'],
-    },
-    {
-      id: 'n_nadia_3',
-      personId: 'nadia',
-      category: 'tax',
-      title: 'Quick answer on a tax question before filing',
-      description: 'One question on deductible home-office expenses.',
-      budgetMax: 150,
-      window: { startHour: 0, endHour: 24, label: 'Today' },
-      distanceMax: 50,
-      timing: { type: 'asap', deadlineLabel: 'Today', window: { startHour: 0, endHour: 24, label: 'Today' } },
-      effort: 'few-hours',
-      locationMode: 'remote',
-      authority: 'none',
-      priorities: ['trust'],
-    },
-  ],
-  offers: [
-    {
-      id: 'o_nadia_1',
-      personId: 'nadia',
-      category: 'advisory',
-      title: 'Resume & LinkedIn coaching',
-      description: 'Former recruiter. One-hour working sessions, remote.',
-      price: 60,
-      window: { startHour: 20, endHour: 90, label: 'Weekday evenings' },
-      negotiable: true,
-      floorPrice: 50,
-      timing: { type: 'flexible', window: { startHour: 20, endHour: 90, label: 'Weekday evenings' } },
-      capacity: 'part-time',
-      locationMode: 'remote',
-      authority: 'within-bounds',
-      priorities: [],
-    },
-  ],
-  categories: ['finance', 'tax', 'admissions', 'advisory'],
-  standardOfValue: { order: ['trust', 'budget', 'geography', 'expertise'] },
-};
-
 function person(p: Omit<Person, 'standardOfValue'>): Person {
   return { ...p, standardOfValue: { order: ['budget', 'geography', 'trust', 'expertise'] } };
 }
@@ -389,23 +304,19 @@ const others: Person[] = [
   }),
 ];
 
-const people: AppState['people'] = Object.fromEntries([viewer, ...others].map((p) => [p.id, p]));
+const people: AppState['people'] = Object.fromEntries(others.map((p) => [p.id, p]));
 
+/**
+ * The market as a brand-new account finds it: other participants and their open
+ * listings only. Nothing here belongs to the viewer — their profile is created
+ * from what they enter at signup (domain/identity.ts).
+ */
 export const initialState: AppState = {
-  viewerId: 'nadia',
-  onboarded: false,
-  household: [
-    { name: 'Nadia', initials: 'NP' },
-    { name: 'Lyanne', initials: 'LG' },
-    { name: 'Sebi', initials: 'SB' },
-  ],
+  account: null,
+  signedIn: false,
   themeMode: 'light',
   notificationPref: 'live',
-  paymentMethods: [
-    { id: 'pm_visa', label: 'Visa ending 6411' },
-    { id: 'pm_amex', label: 'Amex ending 1005' },
-  ],
-  defaultPaymentId: 'pm_visa',
+  paymentMethods: [],
   people,
   categories,
 
@@ -496,7 +407,6 @@ export const initialState: AppState = {
       window: { startHour: 0, endHour: 2160, label: 'This quarter · remote or on-site' },
       distanceMi: 0,
       urgencyNote: '3 companies in active diligence — bundling available',
-      bundleId: 'b1',
       liquiditySignal: -0.4,
       negotiable: false,
     },
@@ -531,81 +441,8 @@ export const initialState: AppState = {
     },
   ],
 
-  matches: {
-    match1: {
-      id: 'match1',
-      cardId: 'c2',
-      personId: 'elena',
-      title: 'Independent admissions consultant — capacity for 2 more students this cycle',
-      kind: 'offer',
-      category: 'admissions',
-      status: 'negotiating',
-      firstPrice: 180,
-      currentPrice: 150,
-      negotiable: true,
-      floorPrice: 150,
-      window: { startHour: 0, endHour: 96, label: 'This week · remote' },
-      timeline: [
-        { from: 'agent', text: 'Sent your terms to Elena.' },
-        { from: 'them', text: 'Elena can do $150 for both essays.', price: 150 },
-        { from: 'agent', text: "That's $30 under her usual $180 — want me to lock it in?" },
-      ],
-    },
-    match2: {
-      id: 'match2',
-      cardId: 'c1',
-      personId: 'claire',
-      title: 'Former Big Four tax partner — two clients this month',
-      kind: 'offer',
-      category: 'tax',
-      status: 'mutual',
-      firstPrice: 220,
-      currentPrice: 220,
-      negotiable: true,
-      floorPrice: 180,
-      window: { startHour: 0, endHour: 720, label: 'This month · remote' },
-      timeline: [{ from: 'agent', text: 'Claire responded — she has a slot open this month.' }],
-    },
-  },
-
-  bookings: [
-    {
-      id: 'b1',
-      personId: 'claire',
-      service: 'Tax return review',
-      when: 'Aug 30 · 2:00pm',
-      distanceMi: 0,
-      price: 195,
-      status: 'complete',
-      role: 'buyer',
-      category: 'tax',
-      savedAmount: 25,
-      verifiedLine: 'Identity + insurance verified',
-    },
-  ],
-
-  bundles: {
-    b1: {
-      id: 'b1',
-      personName: 'Victor · Diligence review',
-      when: 'This quarter',
-      slots: [
-        { label: 'You', value: '$375', sub: 'Your engagement' },
-        { label: '2 companies', value: 'Joined', sub: 'Similar diligence scope' },
-        { label: 'Remote', value: 'Invited', sub: '1 more' },
-      ],
-      confirmedCount: 2,
-      totalCount: 3,
-      yourPrice: 375,
-      originalPrice: 450,
-      savedEach: 75,
-      steps: [
-        'Matched three companies running similar diligence work this quarter.',
-        'Each company\'s deal terms stay private until approval.',
-        "Holding Victor's bundled rate for 12 minutes.",
-      ],
-    },
-  },
+  matches: {},
+  bookings: [],
 
   permissions: [
     { key: 'location', label: 'Location', sublabel: 'Approximate until booking', enabled: true },

@@ -2,12 +2,12 @@ import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
-import { Btn, Divider, Field, Row, Screen, Txt } from '@/components/base';
+import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { CRITERION_META } from '@/domain/matching';
-import { addHouseholdMember, resetDemo, setThemeMode } from '@/services/market';
-import { colors, fontDisplay, radius, space } from '@/theme';
+import { resetDevice, setThemeMode } from '@/services/account';
+import { colors, fontDisplay, space } from '@/theme';
 import type { IconName } from '@/components/base';
 import type { NotificationPref } from '@/domain/types';
 
@@ -21,10 +21,8 @@ const NOTIF_LABEL: Record<NotificationPref, string> = {
 export default function You() {
   const router = useRouter();
   const {
-    people,
-    viewerId,
+    account,
     permissions,
-    household,
     categories,
     paymentMethods,
     defaultPaymentId,
@@ -33,36 +31,23 @@ export default function You() {
     bookings,
   } = useAppState();
   const completedCount = bookings.filter((b) => b.status === 'complete').length;
-  const viewer = people[viewerId];
+  const viewer = useViewer();
   const enabled = permissions.filter((p) => p.enabled).length;
-  const [addingMember, setAddingMember] = useState(false);
-  const [memberName, setMemberName] = useState('');
-  const [busy, setBusy] = useState(false);
   const [resetArmed, setResetArmed] = useState(false);
   const [resetting, setResetting] = useState(false);
 
-  const onResetDemo = async () => {
+  const onErase = async () => {
     if (!resetArmed) {
       setResetArmed(true);
       return;
     }
     setResetting(true);
-    await resetDemo();
+    await resetDevice();
     setResetting(false);
-    router.replace('/today');
   };
 
   const myCategories = categories.filter((c) => viewer.categories.includes(c.id)).map((c) => c.label);
   const defaultPayment = paymentMethods.find((p) => p.id === defaultPaymentId);
-
-  const addMember = async () => {
-    if (!memberName.trim()) return;
-    setBusy(true);
-    await addHouseholdMember(memberName.trim());
-    setBusy(false);
-    setMemberName('');
-    setAddingMember(false);
-  };
 
   return (
     <Screen scroll>
@@ -71,7 +56,7 @@ export default function You() {
         <View>
           <Txt variant="title">{viewer.name}</Txt>
           <Txt variant="small" color={colors.textFaint} style={{ marginTop: 2 }}>
-            {viewer.location}
+            {viewer.location || 'Location not set'}
           </Txt>
         </View>
       </Row>
@@ -170,50 +155,6 @@ export default function You() {
         </Txt>
       ) : null}
 
-      {/* Household */}
-      <Txt variant="heading" style={{ marginTop: space.xl }}>
-        People your agent can help
-      </Txt>
-      <Row gap={space.md} style={{ marginTop: space.md, flexWrap: 'wrap' }}>
-        {household.map((h) => (
-          <View key={h.name} style={{ alignItems: 'center', gap: 6 }}>
-            <Avatar initials={h.initials} />
-            <Txt variant="small" color={colors.textDim}>
-              {h.name}
-            </Txt>
-          </View>
-        ))}
-        {!addingMember ? (
-          <Pressable onPress={() => setAddingMember(true)} style={{ alignItems: 'center', gap: 6 }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: radius.control,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderStyle: 'dashed',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Feather name="plus" size={18} color={colors.textFaint} />
-            </View>
-            <Txt variant="small" color={colors.textFaint}>
-              Add
-            </Txt>
-          </Pressable>
-        ) : null}
-      </Row>
-      {addingMember ? (
-        <Row gap={space.sm} style={{ marginTop: space.md }}>
-          <View style={{ flex: 1 }}>
-            <Field value={memberName} onChangeText={setMemberName} placeholder="Their name" />
-          </View>
-          <Btn title="Add" loading={busy} disabled={!memberName.trim()} style={{ height: 48 }} onPress={addMember} />
-          <Btn title="Cancel" variant="ghost" style={{ height: 48 }} onPress={() => setAddingMember(false)} />
-        </Row>
-      ) : null}
-
       {/* Settings */}
       <Txt variant="heading" style={{ marginTop: space.xl }}>
         Settings
@@ -225,8 +166,6 @@ export default function You() {
           value={`${enabled} of ${permissions.length} enabled`}
           onPress={() => router.push('/permissions')}
         />
-        <Divider />
-        <SettingRow icon="message-circle" label="Talk to your agent" value="Speak, or type" onPress={() => router.push('/agent')} />
         <Divider />
         <SettingRow icon="credit-card" label="Payment methods" value={defaultPayment?.label ?? 'Add a card'} onPress={() => router.push('/payment')} />
         <Divider />
@@ -260,17 +199,17 @@ export default function You() {
           />
         </Row>
         <Divider />
-        <SettingRow icon="log-in" label="Account & login" value="nadia@light.inc" onPress={() => router.push('/account')} />
+        <SettingRow icon="log-in" label="Account & login" value={account?.email ?? ''} onPress={() => router.push('/account')} />
         <Divider />
-        <Pressable onPress={onResetDemo} style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
+        <Pressable onPress={onErase} style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
           <Row gap={space.md}>
             <Feather name="rotate-ccw" size={17} color={colors.accent2} />
             <View style={{ flex: 1 }}>
               <Txt variant="body" color={colors.accent2}>
-                {resetting ? 'Resetting…' : resetArmed ? 'Tap again to confirm' : 'Reset demo'}
+                {resetting ? 'Erasing…' : resetArmed ? 'Tap again to erase' : 'Erase this device'}
               </Txt>
               <Txt variant="small" color={colors.textFaint}>
-                Restores the seeded starting scenario — this device only
+                Deletes your account and activity from this device
               </Txt>
             </View>
           </Row>

@@ -4,7 +4,7 @@ import { Dimensions, Pressable, ScrollView, View } from 'react-native';
 import { Chip, Divider, Row, Screen, Segmented, Txt } from '@/components/base';
 import { Avatar, DiscoveryTag, FitDisclosure, TrustBadge, ValueBadge } from '@/components/domain';
 import { MarketField } from '@/components/MarketField';
-import { useAppState, useFit } from '@/state/hooks';
+import { useAppState, useFit, useViewer } from '@/state/hooks';
 import { inferWorkCategories, WORK_LABEL } from '@/domain/intents';
 import { computeFit, computeMarketValue, passesHardConstraints, timeBucket, TIME_LABEL } from '@/domain/matching';
 import { likeCard, passCard } from '@/services/market';
@@ -37,8 +37,8 @@ const WORK_OPTIONS: { key: WorkFilter; label: string }[] = [
 
 export default function Discover() {
   const { category: categoryParam } = useLocalSearchParams<{ category?: string }>();
-  const { people, viewerId, cards, categories } = useAppState();
-  const viewer = people[viewerId];
+  const { people, cards, categories } = useAppState();
+  const viewer = useViewer();
   const [filter, setFilter] = useState<Filter>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('anytime');
   const [workFilter, setWorkFilter] = useState<WorkFilter>('all');
@@ -166,12 +166,13 @@ export default function Discover() {
 
 function DirectoryRow({ card }: { card: MatchCard }) {
   const router = useRouter();
-  const { people, viewerId, categories } = useAppState();
+  const { people, categories } = useAppState();
+  const viewer = useViewer();
   const person = people[card.personId];
   const fit = useFit(card);
   const category = categories.find((c) => c.id === card.category);
   const value = computeMarketValue(card, category);
-  const isDiscovery = !people[viewerId].categories.includes(card.category);
+  const isDiscovery = !viewer.categories.includes(card.category);
   const [busy, setBusy] = useState<'like' | 'pass' | null>(null);
 
   const openDetail = () => router.push({ pathname: '/card/[id]', params: { id: card.id } });

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Btn, Divider, Row, Screen, Txt } from '@/components/base';
 import { CRITERION_META } from '@/domain/matching';
-import { completeOnboarding } from '@/services/market';
+import { setStandardOfValue } from '@/services/account';
+import { useAppState } from '@/state/hooks';
 import { colors, fontDisplay, space } from '@/theme';
 import type { Criterion } from '@/domain/types';
 
@@ -20,11 +21,15 @@ export default function Onboarding() {
   const remaining = CRITERIA.filter((c) => !order.includes(c.key));
   const pickCriterion = (key: Criterion) => setOrder((o) => [...o, key]);
 
+  const { account } = useAppState();
+  // Redoing it from You returns there; during onboarding the route guard moves on to Today.
+  const redoing = account?.onboarding === 'done';
+
   const finish = async () => {
     setBusy(true);
-    await completeOnboarding(order);
+    await setStandardOfValue(order);
     setBusy(false);
-    router.replace('/today');
+    if (redoing) router.canGoBack() ? router.back() : router.replace('/you');
   };
 
   return (

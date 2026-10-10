@@ -98,7 +98,13 @@ function PickerField({
       <Txt variant="small" color={colors.textFaint} style={{ marginBottom: 6 }}>
         {label}
       </Txt>
-      <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => pressed && { opacity: 0.6 }}>
         <Row
           style={{
             justifyContent: 'space-between',
@@ -146,6 +152,8 @@ function OptionModal({
                 <View key={opt}>
                   {i > 0 ? <Divider /> : null}
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={opt}
                     onPress={() => onSelect(opt, i)}
                     style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
                     <Txt variant="body">{opt}</Txt>

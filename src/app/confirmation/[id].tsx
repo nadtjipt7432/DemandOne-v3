@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Card, Row, Screen, Txt } from '@/components/base';
 import { Avatar, VerifyPill } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { FEE_DISCLOSURE } from '@/domain/pricing';
 import { confirmFulfillment, markDelivered, submitFeedback } from '@/services/market';
 import { colors, fontDisplay, radius, space } from '@/theme';
@@ -14,9 +14,8 @@ const STATUS_LABEL = { confirmed: 'Confirmed', live: 'Live', delivered: 'Deliver
 export default function Confirmation() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bookings, people, viewerId, categories } = useAppState();
+  const { bookings, people, categories } = useAppState();
   const booking = bookings.find((b) => b.id === id);
-  const [onCalendar, setOnCalendar] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [fulfillBusy, setFulfillBusy] = useState(false);
   const [feedbackBusy, setFeedbackBusy] = useState<'yes' | 'no' | null>(null);
@@ -34,7 +33,7 @@ export default function Confirmation() {
   }
 
   const p = people[booking.personId];
-  const viewer = people[viewerId];
+  const viewer = useViewer();
   const isBuyer = booking.role === 'buyer';
   const marketAvg = categories.find((c) => c.id === booking.category)?.marketAvgPrice;
   const earnedBonus = !isBuyer && marketAvg ? Math.round(booking.price - marketAvg) : 0;
@@ -129,7 +128,7 @@ export default function Confirmation() {
         </Row>
         <Row style={{ justifyContent: 'space-between', marginTop: space.md }}>
           <Txt variant="small" color={colors.textDim}>
-            {booking.when} · {booking.distanceMi} mi · 7 min from ask to booking
+            {booking.when} · {booking.distanceMi} mi
           </Txt>
           <VerifyPill label="Checked" />
         </Row>
@@ -213,12 +212,6 @@ export default function Confirmation() {
 
       {/* Actions */}
       <View style={{ marginTop: space.xl, gap: space.md }}>
-        <Btn
-          title={onCalendar ? 'Added to calendar ✓' : 'Add to calendar'}
-          icon={onCalendar ? 'check' : 'calendar'}
-          variant={onCalendar ? 'secondary' : 'primary'}
-          onPress={() => setOnCalendar(true)}
-        />
         {isBuyer ? (
           <Btn
             title={authorized ? 'Payment authorized ✓' : `Authorize $${booking.price}`}
@@ -227,13 +220,6 @@ export default function Confirmation() {
             onPress={() => setAuthorized(true)}
           />
         ) : null}
-        <Btn
-          title={`Message ${p?.name?.split(' ')[0] ?? 'them'}`}
-          icon="message-circle"
-          variant="ghost"
-          onPress={() => router.push({ pathname: '/message/[id]', params: { id: booking.id } })}
-        />
-        <Btn title="Talk to your agent" icon="compass" variant="ghost" onPress={() => router.push('/agent')} />
         <Btn title="Done" variant="ghost" onPress={() => router.replace('/matches')} />
       </View>
     </Screen>

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Btn, Card, Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, Header, TrustBadge } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { useAppState, useViewer } from '@/state/hooks';
 import { computeFit, findScheduleConflict, windowsFit } from '@/domain/matching';
 import { FEE_DISCLOSURE } from '@/domain/pricing';
 import { keepWatching, likeCard, secureCard } from '@/services/market';
@@ -83,8 +83,8 @@ function ProofDisclosure({ person }: { person: Person }) {
 export default function Recommendations() {
   const router = useRouter();
   const { id: targetId, mode } = useLocalSearchParams<{ id: string; mode: 'need' | 'offer' }>();
-  const { people, viewerId, cards, bookings } = useAppState();
-  const viewer = people[viewerId];
+  const { people, cards, bookings } = useAppState();
+  const viewer = useViewer();
   const [busy, setBusy] = useState<string | null>(null);
 
   const target = mode === 'need' ? viewer.needs.find((n) => n.id === targetId) : viewer.offers.find((o) => o.id === targetId);
