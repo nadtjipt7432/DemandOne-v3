@@ -1,78 +1,50 @@
-import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { Btn, Divider, Field, Row, Screen, Txt } from '@/components/base';
-import { Header } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
 import { addPaymentMethod, setDefaultPayment } from '@/services/account';
+import { useAppState } from '@/state/hooks';
+import { Button, Field, Page, Row, Section, Stack, T, Tap, TopBar } from '@/ui/core';
+import { Icon } from '@/ui/Icon';
 import { colors, space } from '@/theme';
 
+/** Payment methods — demo only: cards are labels, nothing is ever charged. */
 export default function Payment() {
   const router = useRouter();
   const { paymentMethods, defaultPaymentId } = useAppState();
-  const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const choose = async (paymentId: string) => {
-    setBusy(paymentId);
-    await setDefaultPayment(paymentId);
-    setBusy(null);
-  };
+  const [error, setError] = useState<string | null>(null);
 
   const add = async () => {
-    if (!label.trim()) return;
-    setBusy('add');
+    if (!/\d{4}\s*$/.test(label.trim())) return setError('End with the last four digits, for example "Visa ending 4242".');
+    setError(null);
     await addPaymentMethod(label.trim());
-    setBusy(null);
     setLabel('');
-    setAdding(false);
   };
 
   return (
-    <Screen scroll>
-      <Header onBack={() => router.back()} title="Payment methods" />
-      <Txt variant="small" color={colors.textDim} style={{ marginTop: space.xs }}>
-        Charged only after work is complete, and only at the price you approved.
-      </Txt>
-
-      <View style={{ marginTop: space.lg }}>
-        {paymentMethods.map((pm, i) => {
-          const active = pm.id === defaultPaymentId;
-          return (
-            <View key={pm.id}>
-              {i > 0 ? <Divider /> : null}
-              <Pressable
-                onPress={() => choose(pm.id)}
-                disabled={busy !== null}
-                style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
-                <Row style={{ justifyContent: 'space-between' }}>
-                  <Row gap={space.md}>
-                    <Feather name="credit-card" size={17} color={colors.textFaint} />
-                    <Txt variant="body" color={active ? colors.accent : colors.text}>
-                      {pm.label}
-                    </Txt>
-                  </Row>
-                  {active ? <Txt variant="small" color={colors.accent}>Default</Txt> : null}
+    <Page>
+      <TopBar onBack={() => router.back()} />
+      <T v="display">Payment</T>
+      <T v="body" color={colors.inkDim} style={{ marginTop: space.sm }}>Demo payments: the agreed total is held when you authorize and released when you confirm the work. No money moves.</T>
+      <Section title="Cards" ruled>
+        {paymentMethods.length === 0 ? <T v="body" color={colors.inkDim} style={{ paddingVertical: space.md }}>None yet.</T> : null}
+        {paymentMethods.map((p) => (
+          <Tap key={p.id} label={`Use ${p.label}`} onPress={() => setDefaultPayment(p.id)}>
+            <Row justify="space-between" style={{ paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.rule }}>
+              <T v="body">{p.label}</T>
+              {p.id === defaultPaymentId ? (
+                <Row gap={4}>
+                  <Icon name="check" size={16} color={colors.forest} />
+                  <T v="small" color={colors.forest}>Default</T>
                 </Row>
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
-
-      {adding ? (
-        <View style={{ marginTop: space.lg, gap: space.sm }}>
-          <Field value={label} onChangeText={setLabel} placeholder="e.g. Mastercard ending 4471" />
-          <Row gap={space.sm}>
-            <Btn title="Add card" loading={busy === 'add'} disabled={!label.trim()} style={{ flex: 1, height: 44 }} onPress={add} />
-            <Btn title="Cancel" variant="ghost" style={{ height: 44 }} onPress={() => setAdding(false)} />
-          </Row>
-        </View>
-      ) : (
-        <Btn title="Add a payment method" variant="secondary" icon="plus" style={{ marginTop: space.lg }} onPress={() => setAdding(true)} />
-      )}
-    </Screen>
+              ) : null}
+            </Row>
+          </Tap>
+        ))}
+        <Stack gap={space.md} style={{ marginTop: space.lg }}>
+          <Field label="Add a demo card" value={label} onChangeText={setLabel} placeholder="Visa ending 4242" error={error ?? undefined} />
+          <Button kind="secondary" title="Add card" onPress={add} disabled={!label.trim()} />
+        </Stack>
+      </Section>
+    </Page>
   );
 }

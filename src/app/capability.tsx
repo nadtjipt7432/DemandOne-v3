@@ -1,33 +1,22 @@
 import { View } from 'react-native';
-import { Screen, Txt } from '@/components/base';
-import { CapabilityEditor } from '@/components/CapabilityEditor';
-import { setCapabilityProfile, skipCapability } from '@/services/account';
-import { colors, fontDisplay, space } from '@/theme';
-import type { CapabilityProfile } from '@/domain/types';
+import { skipCapability } from '@/services/account';
+import { useViewer } from '@/state/hooks';
+import { AmbientField } from '@/ui/Ambient';
+import { CapabilityForm } from '@/ui/CapabilityForm';
+import { Page, T } from '@/ui/core';
+import { colors, space } from '@/theme';
 
-/**
- * Capability onboarding — asked once, right after login, before Standard of
- * Value. A capability profile is a standing description DemandOne can match
- * demand against (see myMarket.ts's getCapabilityOpportunities), not an active
- * Offer — nothing is posted to the Exchange from here. Skippable: a buyer who
- * has nothing to offer shouldn't be blocked from entering the market.
- */
+/** Onboarding step 2. Saving or skipping advances onboarding; the route guard moves on. */
 export default function Capability() {
-  // Both actions advance the onboarding step; the route guard moves on to the next screen.
-  const onSave = (profile: CapabilityProfile) => setCapabilityProfile(profile);
-
+  const viewer = useViewer();
   return (
-    <Screen scroll>
-      <Txt variant="title" style={{ marginTop: space.sm, fontFamily: fontDisplay }}>
-        What are you good at?
-      </Txt>
-      <Txt variant="small" color={colors.textDim} style={{ marginTop: space.xs }}>
-        What could you offer? Say it or type it — DemandOne works out where it's relevant.
-      </Txt>
-
-      <View style={{ marginTop: space.xl }}>
-        <CapabilityEditor onSave={onSave} onSkip={skipCapability} />
+    <Page backdrop={<AmbientField mood="listening" height={260} />}>
+      <View style={{ marginTop: space.xxl, marginBottom: space.xl }}>
+        <T v="label" color={colors.inkDim}>Step 1 of 2</T>
+        <T v="display" style={{ marginTop: space.xs }}>What can you do?</T>
+        <T v="body" color={colors.inkDim} style={{ marginTop: space.sm }}>Say it or type it. DemandOne works out where it’s relevant and shows you demand for it.</T>
       </View>
-    </Screen>
+      <CapabilityForm viewer={viewer} submitLabel="Save and continue" onDone={() => {}} onSkip={skipCapability} />
+    </Page>
   );
 }

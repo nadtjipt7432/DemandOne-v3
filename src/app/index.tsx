@@ -1,74 +1,56 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Dimensions, View } from 'react-native';
-import { Btn, Screen, Txt } from '@/components/base';
-import { Logomark } from '@/components/domain';
-import { IntroAnimation } from '@/components/IntroAnimation';
-import { MarketField } from '@/components/MarketField';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppState } from '@/state/hooks';
-import { colors, fontDisplay, fontDisplayItalic, space } from '@/theme';
+import { AmbientField, CircleMark } from '@/ui/Ambient';
+import { Button, Row, T } from '@/ui/core';
+import { field, MAX_WIDTH, space } from '@/theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-// Capped, not just a fraction of screen height — on a small phone a pure
-// percentage still left the page taller than the viewport. Scroll is still the
-// safety net below, but this keeps the hero from being the reason it's needed.
-const HERO_HEIGHT = Math.min(140, Math.round(SCREEN_HEIGHT * 0.18));
-
-export default function Welcome() {
+/**
+ * Landing — the brand moment. A night field, the two circles of the mark (buyer
+ * and seller) drifting toward each other, and one plain promise. Counts are the
+ * real open positions in the market.
+ */
+export default function Landing() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { cards } = useAppState();
-  const [showIntro, setShowIntro] = useState(true);
-
-  // One restrained live-market line, counted from the actual open listings.
-  const openNeeds = cards.filter((c) => c.kind === 'need').length;
-  const openOffers = cards.filter((c) => c.kind === 'offer').length;
+  const needs = cards.filter((c) => c.kind === 'need').length;
+  const offers = cards.filter((c) => c.kind === 'offer').length;
 
   return (
-    <View style={{ flex: 1 }}>
-      <Screen scroll contentStyle={{ paddingBottom: space.xl, flexGrow: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Logomark size={22} />
-          <Txt variant="bodyStrong" style={{ fontFamily: fontDisplay }}>
-            DemandOne
-          </Txt>
+    <View style={{ flex: 1, backgroundColor: field.night }}>
+      <AmbientField mood="night" breathe />
+      <View style={{ flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: space.xl, paddingTop: insets.top + space.lg, paddingBottom: insets.bottom + space.xl }}>
+        <Row gap={space.sm}>
+          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#2E6A58' }} />
+          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: field.amber, marginLeft: -8, opacity: 0.9 }} />
+          <T v="entry" color={field.nightInk} style={{ marginLeft: 4 }}>DemandOne</T>
+        </Row>
+
+        <View style={{ flex: 1, justifyContent: 'center', paddingVertical: space.xl }}>
+          <CircleMark size={150} meet onNight style={{ marginBottom: space.xxl }} />
+          <T v="hero" color={field.nightInk}>Say what you need. Say what you can do.</T>
+          <T v="body" color={field.nightDim} style={{ marginTop: space.md, maxWidth: 360 }}>
+            An agent turns it into terms, finds the other side of the market, negotiates, and waits for your yes.
+          </T>
         </View>
 
-        <View style={{ marginTop: space.xl }}>
-          <MarketField width={SCREEN_WIDTH} height={HERO_HEIGHT} dotCount={280} style={{ borderRadius: 4, marginHorizontal: -space.lg }} />
-          <View style={{ gap: space.md, marginTop: space.lg }}>
-            <Txt variant="small" color={colors.textFaint}>
-              Everyone here is both
-            </Txt>
-            <Txt variant="display" style={{ fontFamily: fontDisplay, fontSize: 28, lineHeight: 34 }}>
-              Tell us what you need.{'\n'}Tell us what you offer.{'\n'}
-              <Txt variant="display" color={colors.accent2} style={{ fontFamily: fontDisplayItalic, fontSize: 28, lineHeight: 34 }}>
-                We'll close the gap.
-              </Txt>
-            </Txt>
-            <Txt variant="body" color={colors.textDim}>
-              Say what's going on, in your own words — out loud or typed. Your agent finds who's
-              actually worth your time and handles the price behind the scenes.
-            </Txt>
-          </View>
+        <View style={{ gap: space.md }}>
+          <Row style={{ borderTopWidth: 1, borderColor: 'rgba(242,237,226,0.18)', paddingTop: space.md }} gap={space.xxl}>
+            <View>
+              <T v="price" color={field.nightInk}>{needs}</T>
+              <T v="label" color={field.nightDim}>open needs</T>
+            </View>
+            <View>
+              <T v="price" color={field.nightInk}>{offers}</T>
+              <T v="label" color={field.nightDim}>open offers</T>
+            </View>
+          </Row>
+          <Button kind="inverse" title="Enter with your email" onPress={() => router.push('/login')} />
+          <T v="small" color={field.nightDim} align="center">New or returning. Nothing binds until you approve it.</T>
         </View>
-
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <View style={{ gap: space.md, marginTop: space.xl }}>
-            <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
-              {openNeeds} open needs · {openOffers} open offers
-            </Txt>
-            <Btn title="Enter DemandOne" icon="arrow-right" onPress={() => router.push('/login')} />
-            <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
-              New or returning — all it takes is your email.{'\n'}You approve every commitment.
-            </Txt>
-          </View>
-        </View>
-      </Screen>
-
-      {/* The real page is already mounted above, for the skip path — tap anywhere
-          to reveal it instead of waiting. Letting the animation finish on its own
-          carries straight into /login instead (see IntroAnimation). */}
-      {showIntro ? <IntroAnimation onSkip={() => setShowIntro(false)} /> : null}
+      </View>
     </View>
   );
 }

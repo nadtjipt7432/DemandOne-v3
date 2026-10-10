@@ -1,122 +1,71 @@
-import { delay } from '@/infra/clock';
+import { delay, nowIso } from '@/infra/clock';
+import { roundTo, priceStep } from '@/domain/terms';
 import { getState, id, setState } from '@/state/store';
+import { inboundBidsFor } from './negotiation';
 import { updateViewer, viewerOf } from './viewer';
-import type {
-  Booking,
-  BuyerAuthority,
-  Capacity,
-  Criterion,
-  Effort,
-  LocationMode,
-  Match,
-  Need,
-  Offer,
-  SellerAuthority,
-  TimeWindow,
-  TimingSpec,
-} from '@/domain/types';
+import type { Criterion, LocationMode, Need, Offer, PriceUnit, TimingSpec } from '@/domain/types';
 
 /**
- * Market services (V2 engine, replaced by the Phase 2 mandate/deal engine). With
- * services/account.ts, the ONLY write path: every function is async and shaped like
- * a backend mutation; screens never write to the store directly.
+ * The viewer's own positions in the market — Needs and Offers. With
+ * negotiation.ts, transactions.ts and account.ts, the only write path.
  */
 
-/**
- * One open input, no upfront side to pick — the agent routes it. A real system would
- * use the LLM already reading the sentence; this mock uses a small keyword heuristic
- * as its stand-in, so the "no wrong door" interaction is real even though the
- * classifier behind it is deliberately simple.
- */
-const OFFER_SIGNALS = ["i can ", 'i offer', 'i have ', 'available', 'spare', 'free time', "i'm offering", 'offering '];
+export const DEFAULT_TIMING: TimingSpec = { type: 'flexible', window: { startHour: 0, endHour: 336, label: 'Within two weeks' } };
 
-export function inferMode(text: string): 'need' | 'offer' {
-  const lower = text.toLowerCase();
-  return OFFER_SIGNALS.some((sig) => lower.includes(sig)) ? 'offer' : 'need';
-}
-
-const DEFAULT_TIMING: TimingSpec = { type: 'flexible', window: { startHour: 0, endHour: 48, label: 'This week' } };
-
-export interface AskInput {
+export interface PositionInput {
   mode: 'need' | 'offer';
-  text: string;
-  /** From Universal Intent Search, which already knows the right category — falls back to a guess otherwise. */
-  category?: string;
-  /** The hard ceiling, for a need — "never above this." Falls back to a generic default when unset. */
-  budgetMax?: number;
-  /** Comfortable range low, for a need. */
-  budgetMin?: number;
-  /** The asking price, for an offer. Falls back to a generic default when unset. */
-  price?: number;
-  /** Basic clearing rules, for an offer — where the floor/negotiable setting actually comes in. */
-  negotiable?: boolean;
+  title: string;
+  description?: string;
+  category: string;
+  /** Need: the private maximum. Offer: the public ask. */
+  price: number;
+  unit?: PriceUnit;
+  /** Offer only: private minimum. Defaults to 85% of the ask. */
   floorPrice?: number;
-  /** Timing as a first-class market variable — always carries a derived TimeWindow. */
   timing?: TimingSpec;
-  effort?: Effort;
-  capacity?: Capacity;
+  capacityHours?: number;
   locationMode?: LocationMode;
-  location?: string;
-  authority?: BuyerAuthority | SellerAuthority;
-  /** Up to 3, ranked by selection order — overrides the viewer's global Standard of Value for this mission. */
   priorities?: Criterion[];
-  fitNote?: string;
 }
 
-/** Turn a free-text ask into a structured need or offer for the viewer's own profile. Returns its id. */
-export async function createFromText(input: AskInput): Promise<string> {
+/** Post a Need or release an Offer. Returns its id. An Offer draws bids from buyers with matching open needs. */
+export async function createPosition(input: PositionInput): Promise<string> {
   await delay(400);
   const newId = id(input.mode === 'need' ? 'n' : 'o');
   const timing = input.timing ?? DEFAULT_TIMING;
   setState((s) => {
     const viewer = viewerOf(s);
-    const category = input.category ?? viewer.categories[0] ?? 'advisory';
+    const common = {
+      id: newId,
+      personId: viewer.id,
+      category: input.category,
+      title: input.title,
+      description: input.description ?? input.title,
+      unit: input.unit ?? 'fixed',
+      window: timing.window,
+      howLong: 'once' as const,
+      timing,
+      locationMode: input.locationMode ?? 'remote',
+      priorities: input.priorities ?? [],
+      createdAt: nowIso(),
+    };
     if (input.mode === 'need') {
-      const need: Need = {
-        id: newId,
-        personId: viewer.id,
-        category,
-        title: input.text,
-        description: `Your agent turned "${input.text}" into a structured need.`,
-        budgetMax: input.budgetMax ?? 150,
-        budgetMin: input.budgetMin,
-        window: timing.window,
-        distanceMax: 10,
-        howLong: 'once',
-        timing,
-        effort: input.effort ?? 'not-sure',
-        locationMode: input.locationMode ?? 'remote',
-        location: input.location,
-        authority: (input.authority as BuyerAuthority) ?? 'within-range',
-        priorities: input.priorities ?? [],
-      };
+      const need: Need = { ...common, budgetMax: input.price, distanceMax: 50 };
       return updateViewer(s, (v) => ({ ...v, needs: [need, ...v.needs] }));
     }
     const offer: Offer = {
-      id: newId,
-      personId: viewer.id,
-      category,
-      title: input.text,
-      description: `Your agent turned "${input.text}" into a structured offer.`,
-      price: input.price ?? 75,
-      window: timing.window,
-      howLong: 'once',
-      negotiable: input.negotiable ?? true,
-      floorPrice: input.negotiable ? input.floorPrice : undefined,
-      timing,
-      capacity: input.capacity ?? 'one-project',
-      locationMode: input.locationMode ?? 'remote',
-      location: input.location,
-      authority: (input.authority as SellerAuthority) ?? 'within-bounds',
-      priorities: input.priorities ?? [],
-      fitNote: input.fitNote,
+      ...common,
+      price: input.price,
+      floorPrice: input.floorPrice ?? roundTo(input.price * 0.85, priceStep(input.price), 'up'),
+      capacityHours: input.capacityHours,
     };
-    return updateViewer(s, (v) => ({ ...v, offers: [offer, ...v.offers] }));
+    const withOffer = updateViewer(s, (v) => ({ ...v, offers: [offer, ...v.offers] }));
+    return inboundBidsFor(withOffer, offer);
   });
   return newId;
 }
 
-/** Fallback when nothing recommended clears the bar: keep watching until the market lines up. */
+/** Standing demand: keep watching until the market lines up. */
 export async function keepWatching(mode: 'need' | 'offer', targetId: string): Promise<void> {
   await delay(200);
   setState((s) =>
@@ -128,293 +77,21 @@ export async function keepWatching(mode: 'need' | 'offer', targetId: string): Pr
   );
 }
 
-/** Express interest: the card's person is notified and responds — ready to talk price or book. */
-export async function likeCard(cardId: string): Promise<string | undefined> {
-  await delay(260);
-  let matchId: string | undefined;
-  setState((s) => {
-    const card = s.cards.find((c) => c.id === cardId);
-    if (!card) return s;
-    const counterpart = s.people[card.personId];
-    matchId = id('match');
-    const match: Match = {
-      id: matchId,
-      cardId,
-      personId: card.personId,
-      title: card.title,
-      status: 'mutual',
-      firstPrice: card.price,
-      currentPrice: card.price,
-      negotiable: card.negotiable,
-      floorPrice: card.floorPrice,
-      ceilingPrice: card.ceilingPrice,
-      kind: card.kind,
-      category: card.category,
-      window: card.window,
-      timeline: [
-        { from: 'agent', text: `${counterpart?.name ?? 'They'} responded — ready to talk price or book.` },
-      ],
-    };
-    return {
-      ...s,
-      matches: { ...s.matches, [matchId]: match },
-      cards: s.cards.filter((c) => c.id !== cardId),
-    };
-  });
-  return matchId;
-}
-
-/** Pass: quietly drop the card, no trace left in the Exchange. */
-export async function passCard(cardId: string): Promise<void> {
-  setState((s) => ({ ...s, cards: s.cards.filter((c) => c.id !== cardId) }));
-}
-
-/**
- * Ask the agent to try for a better price on a mutual match. Directional by which
- * side the viewer is on: a buyer (kind 'offer') negotiates down toward the
- * provider's floor; a seller (kind 'need') negotiates up toward the requester's
- * true ceiling — never the other way for either side. Respects that boundary (a
- * basic clearing rule, per the PRD) and says so in plain language rather than
- * pretending to negotiate further once there's no room left.
- */
-export async function negotiateMatch(matchId: string): Promise<void> {
-  await delay(500);
-  setState((s) => {
-    const match = s.matches[matchId];
-    if (!match) return s;
-    const counterpart = s.people[match.personId];
-    const name = counterpart?.name ?? 'them';
-    const isSeller = match.kind === 'need';
-
-    if (!match.negotiable) {
-      return {
-        ...s,
-        matches: {
-          ...s.matches,
-          [matchId]: {
-            ...match,
-            timeline: [...match.timeline, { from: 'agent', text: `${name} has this at a fixed price — no room to negotiate.` }],
-          },
-        },
-      };
-    }
-
-    const tryPrice = isSeller
-      ? Math.min(match.ceilingPrice ?? match.currentPrice, Math.round(match.currentPrice * 1.09))
-      : Math.max(match.floorPrice ?? 1, Math.round(match.currentPrice * 0.91));
-    const noRoomLeft = isSeller ? tryPrice <= match.currentPrice : tryPrice >= match.currentPrice;
-
-    if (noRoomLeft) {
-      return {
-        ...s,
-        matches: {
-          ...s.matches,
-          [matchId]: {
-            ...match,
-            timeline: [
-              ...match.timeline,
-              {
-                from: 'agent',
-                text: isSeller
-                  ? `$${match.currentPrice} is already the most ${name} will pay.`
-                  : `$${match.currentPrice} is already ${name}'s best price.`,
-              },
-            ],
-          },
-        },
-      };
-    }
-
-    return {
-      ...s,
-      matches: {
-        ...s.matches,
-        [matchId]: {
-          ...match,
-          status: 'negotiating',
-          currentPrice: tryPrice,
-          timeline: [
-            ...match.timeline,
-            {
-              from: 'agent',
-              text: isSeller ? `Asked ${name} if they could pay a bit more.` : `Asked ${name} for a better price.`,
-            },
-            { from: 'them', text: `Can do $${tryPrice}.`, price: tryPrice },
-          ],
-        },
-      },
-    };
-  });
-}
-
-/**
- * A second negotiation dimension (price isn't the only lever): offering the
- * counterparty more delivery slack in exchange for a lower price — buyer side
- * only, and only ever surfaced by match/[id].tsx when the viewer's own need in
- * this category is actually flexible (timing.type !== 'asap'), so the trade being
- * offered is real, not invented on the spot.
- */
-export async function negotiateWithFlexibleTiming(matchId: string): Promise<void> {
-  await delay(500);
-  setState((s) => {
-    const match = s.matches[matchId];
-    if (!match || match.kind !== 'offer' || !match.negotiable) return s;
-    const counterpart = s.people[match.personId];
-    const name = counterpart?.name ?? 'them';
-    const tradedPrice = Math.max(match.floorPrice ?? 1, Math.round(match.currentPrice * 0.93));
-    const extendedWindow: TimeWindow = {
-      ...match.window,
-      endHour: match.window.endHour + 96,
-      label: `${match.window.label} · flexible +4 days`,
-    };
-    return {
-      ...s,
-      matches: {
-        ...s.matches,
-        [matchId]: {
-          ...match,
-          status: 'negotiating',
-          currentPrice: tradedPrice,
-          window: extendedWindow,
-          timeline: [
-            ...match.timeline,
-            { from: 'agent', text: `Offered ${name} a few extra days on delivery in exchange for a lower price.` },
-            { from: 'them', text: `If delivery can slide, I can do $${tradedPrice}.`, price: tradedPrice },
-          ],
-        },
-      },
-    };
-  });
-}
-
-/**
- * The viewer explicitly raises their own stated ceiling for a category — never
- * done silently by the agent (see matching.ts/myMarket.ts's tension calc, which
- * this is what actually resolves). Floors at the current value so it only ever
- * moves up.
- */
-export async function raiseMaximum(category: string, newMax: number): Promise<void> {
-  await delay(250);
-  setState((s) =>
-    updateViewer(s, (v) => ({
-      ...v,
-      needs: v.needs.map((n) => (n.category === category ? { ...n, budgetMax: Math.max(n.budgetMax, newMax) } : n)),
-    }))
-  );
-}
-
-function addBooking(
-  s: ReturnType<typeof getState>,
-  b: Omit<Booking, 'id' | 'status'> & { status?: Booking['status'] }
-): { state: ReturnType<typeof getState>; bookingId: string } {
-  const bookingId = id('bk');
-  const booking: Booking = { id: bookingId, status: 'confirmed', ...b };
-  return { state: { ...s, bookings: [booking, ...s.bookings] }, bookingId };
-}
-
-/** Accept a match at its current price → book it. Returns bookingId. */
-export async function acceptMatch(matchId: string): Promise<string> {
-  await delay();
-  let bookingId = '';
-  setState((s) => {
-    const match = s.matches[matchId];
-    if (!match) return s;
-    const person = s.people[match.personId];
-    // kind 'offer' = the card was their offer, viewer pays (buyer). kind 'need' = the
-    // card was their need, viewer is fulfilling it (seller) — the roles this match is about.
-    const role = match.kind === 'need' ? 'seller' : 'buyer';
-    const res = addBooking(s, {
-      personId: match.personId,
-      service: match.title,
-      when: match.window.label,
-      distanceMi: person?.distanceMi ?? 0,
-      price: match.currentPrice,
-      role,
-      category: match.category,
-      window: match.window,
-      savedAmount: role === 'buyer' ? Math.max(0, match.firstPrice - match.currentPrice) : undefined,
-      verifiedLine: person?.verified.insurance ? 'Identity + insurance verified' : 'Identity verified',
-    });
-    bookingId = res.bookingId;
-    return {
-      ...res.state,
-      matches: { ...res.state.matches, [matchId]: { ...match, status: 'booked' } },
-    };
-  });
-  return bookingId;
-}
-
-/** Secure a card directly at its listed (or agent-tried) price, no match dance. Returns bookingId. */
-export async function secureCard(cardId: string, priceOverride?: number): Promise<string> {
-  await delay();
-  let bookingId = '';
-  setState((s) => {
-    const card = s.cards.find((c) => c.id === cardId);
-    if (!card) return s;
-    const person = s.people[card.personId];
-    const price = priceOverride ?? card.price;
-    const role = card.kind === 'need' ? 'seller' : 'buyer';
-    const res = addBooking(s, {
-      personId: card.personId,
-      service: card.title,
-      when: card.window.label,
-      distanceMi: card.distanceMi,
-      price,
-      role,
-      category: card.category,
-      window: card.window,
-      savedAmount: role === 'buyer' && priceOverride ? Math.max(0, card.price - priceOverride) : undefined,
-      verifiedLine: person?.verified.insurance ? 'Identity + insurance verified' : 'Identity verified',
-    });
-    bookingId = res.bookingId;
-    return { ...res.state, cards: res.state.cards.filter((c) => c.id !== cardId) };
-  });
-  return bookingId;
-}
-
-/** Seller action: the work is ready. Never releases payment on its own — see confirmFulfillment. */
-export async function markDelivered(bookingId: string): Promise<void> {
-  await delay(300);
-  setState((s) => ({
-    ...s,
-    bookings: s.bookings.map((b) => (b.id === bookingId && b.status !== 'complete' ? { ...b, status: 'delivered' } : b)),
-  }));
-}
-
-/** Buyer action: the only thing that can move a booking to `complete` — a seller marking their own work complete can't release payment by themselves. */
-export async function confirmFulfillment(bookingId: string): Promise<void> {
-  await delay(300);
-  setState((s) => ({
-    ...s,
-    bookings: s.bookings.map((b) => (b.id === bookingId && b.status === 'delivered' ? { ...b, status: 'complete' } : b)),
-  }));
-}
-
-/**
- * The literal mechanism behind "market memory": a completed booking's counterpart
- * gets a real completedCount/recommendCount update, not a cosmetic one. Guarded by
- * `feedbackGiven` so it can only ever run once per booking.
- */
-export async function submitFeedback(bookingId: string, recommends: boolean): Promise<void> {
+/** Adjust the hours released on one of the viewer's offers. */
+export async function setOfferCapacity(offerId: string, hours: number): Promise<void> {
   await delay(200);
-  setState((s) => {
-    const booking = s.bookings.find((b) => b.id === bookingId);
-    if (!booking || booking.feedbackGiven) return s;
-    const counterpart = s.people[booking.personId];
-    const people = counterpart
-      ? {
-          ...s.people,
-          [booking.personId]: {
-            ...counterpart,
-            completedCount: counterpart.completedCount + 1,
-            recommendCount: counterpart.recommendCount + (recommends ? 1 : 0),
-          },
-        }
-      : s.people;
-    return {
-      ...s,
-      people,
-      bookings: s.bookings.map((b) => (b.id === bookingId ? { ...b, feedbackGiven: true } : b)),
-    };
-  });
+  setState((s) => updateViewer(s, (v) => ({ ...v, offers: v.offers.map((o) => (o.id === offerId ? { ...o, capacityHours: Math.max(0, Math.round(hours)) } : o)) })));
+}
+
+/** Hide a listing from the viewer's Exchange. */
+export async function passCard(cardId: string): Promise<void> {
+  setState((s) => (s.passedCardIds.includes(cardId) ? s : { ...s, passedCardIds: [...s.passedCardIds, cardId] }));
+}
+
+export function findPosition(positionId: string): { kind: 'need'; need: Need } | { kind: 'offer'; offer: Offer } | undefined {
+  const viewer = viewerOf(getState());
+  const need = viewer.needs.find((n) => n.id === positionId);
+  if (need) return { kind: 'need', need };
+  const offer = viewer.offers.find((o) => o.id === positionId);
+  return offer ? { kind: 'offer', offer } : undefined;
 }

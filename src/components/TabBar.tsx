@@ -1,125 +1,61 @@
-import Feather from '@expo/vector-icons/Feather';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppState } from '@/state/hooks';
-import { colors, radius, space, type as typeScale } from '@/theme';
-import type { IconName } from './base';
+import { useAppState, useViewer } from '@/state/hooks';
+import { getDecisions } from '@/state/myMarket';
+import { T } from '@/ui/core';
+import { Icon, IconName } from '@/ui/Icon';
+import { colors, MAX_WIDTH, space } from '@/theme';
 
-interface TabRoute {
-  key: string;
-  name: string;
-}
+const META: Record<string, { label: string; icon: IconName }> = {
+  today: { label: 'Home', icon: 'home' },
+  discover: { label: 'Exchange', icon: 'exchange' },
+  ask: { label: 'Speak', icon: 'mic' },
+  matches: { label: 'Deals', icon: 'deals' },
+  you: { label: 'You', icon: 'user' },
+};
+
 export interface TabBarProps {
-  state: { index: number; routes: TabRoute[] };
-  navigation: { navigate: (name: string, params?: Record<string, string>) => void };
+  state: { index: number; routes: { key: string; name: string }[] };
+  navigation: { navigate: (name: string) => void };
 }
 
-const ICONS: Record<string, IconName> = {
-  today: 'sun',
-  discover: 'repeat',
-  ask: 'mic',
-  matches: 'inbox',
-  you: 'user',
-};
-
-const LABELS: Record<string, string> = {
-  today: 'Today',
-  discover: 'Exchange',
-  ask: 'Ask',
-  matches: 'Requests',
-  you: 'You',
-};
-
+/** Paper tab bar on a fine rule. Speak — the voice entry point — sits at the center. */
 export function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
-  const { matches } = useAppState();
-  // "New ideas, plans shifting in" — fresh matches plus ones actively moving on
-  // price. Booked/passed are resolved, not pending on the user, so they don't count.
-  const activeCount = Object.values(matches).filter(
-    (m) => m.status === 'pending' || m.status === 'mutual' || m.status === 'negotiating'
-  ).length;
+  const app = useAppState();
+  const viewer = useViewer();
+  const waiting = getDecisions(app, viewer.id).length;
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        backgroundColor: colors.bg,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        paddingTop: space.sm,
-        paddingBottom: insets.bottom > 0 ? insets.bottom : space.md,
-        paddingHorizontal: space.sm,
-      }}>
-      {state.routes.map((route, i) => {
-        const focused = state.index === i;
-
-        if (route.name === 'ask') {
-          // The one tab styled as a raised, accent-colored pill — DemandOne's most
-          // visually prominent nav element, so it doubles as voice's entry point from
-          // anywhere in the app: one tap lands on Ask already listening.
+    <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.rule, paddingBottom: Math.max(insets.bottom, space.sm) }}>
+      <View accessibilityRole="tablist" style={{ flexDirection: 'row', width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingTop: space.sm }}>
+        {state.routes.map((route, i) => {
+          const meta = META[route.name];
+          if (!meta) return null;
+          const focused = state.index === i;
+          if (route.name === 'ask') {
+            return (
+              <Pressable key={route.key} accessibilityRole="tab" accessibilityLabel="Speak" accessibilityState={{ selected: focused }} onPress={() => navigation.navigate(route.name)} style={{ flex: 1, alignItems: 'center' }}>
+                <View style={{ width: 52, height: 52, borderRadius: 26, marginTop: -18, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: colors.bg }}>
+                  <Icon name="mic" size={22} color={colors.onForest} />
+                </View>
+                <T v="label" color={focused ? colors.ink : colors.inkFaint} style={{ marginTop: 2 }}>Speak</T>
+              </Pressable>
+            );
+          }
+          const tint = focused ? colors.ink : colors.inkFaint;
+          const badge = route.name === 'matches' ? waiting : 0;
           return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="tab"
-              accessibilityLabel="Ask"
-              accessibilityState={{ selected: focused }}
-              onPress={() => navigation.navigate(route.name, { autoListen: 'true' })}
-              style={({ pressed }) => [{ flex: 1, alignItems: 'center' }, pressed && { opacity: 0.7 }]}>
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: radius.pill,
-                  backgroundColor: colors.accent,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: -14,
-                }}>
-                <Feather name="mic" size={24} color={colors.accentText} />
+            <Pressable key={route.key} accessibilityRole="tab" accessibilityLabel={badge ? `${meta.label}, ${badge} waiting` : meta.label} accessibilityState={{ selected: focused }} onPress={() => navigation.navigate(route.name)} style={({ pressed }) => [{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 }, pressed && { opacity: 0.6 }]}>
+              <View>
+                <Icon name={meta.icon} size={22} color={tint} weight={focused ? 'fill' : 'regular'} />
+                {badge > 0 ? <View style={{ position: 'absolute', top: -2, right: -7, minWidth: 15, height: 15, borderRadius: 8, paddingHorizontal: 3, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' }}><T v="label" color={colors.onForest} style={{ fontSize: 10, lineHeight: 12 }}>{String(badge)}</T></View> : null}
               </View>
+              <T v="label" color={tint}>{meta.label}</T>
             </Pressable>
           );
-        }
-
-        const tint = focused ? colors.accent : colors.textFaint;
-        const badge = route.name === 'matches' ? activeCount : 0;
-        return (
-          <Pressable
-            key={route.key}
-            accessibilityRole="tab"
-            accessibilityLabel={LABELS[route.name]}
-            accessibilityState={{ selected: focused }}
-            onPress={() => navigation.navigate(route.name)}
-            style={({ pressed }) => [
-              { flex: 1, alignItems: 'center', gap: 5 },
-              pressed && { opacity: 0.7 },
-            ]}>
-            <View>
-              <Feather name={ICONS[route.name]} size={22} color={tint} />
-              {badge > 0 ? (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -10,
-                    minWidth: 16,
-                    height: 16,
-                    borderRadius: 8,
-                    paddingHorizontal: 3,
-                    backgroundColor: colors.accent2,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.accentText }}>{badge}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={[typeScale.label, { color: tint, letterSpacing: 0.2 }]}>
-              {LABELS[route.name]}
-            </Text>
-          </Pressable>
-        );
-      })}
+        })}
+      </View>
     </View>
   );
 }

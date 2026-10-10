@@ -1,241 +1,128 @@
 /**
- * "My Market" — the derivations behind the Home screen.
- *
- * Home is not a feed or a dashboard: it's the viewer's live position in the
- * exchange — decisions waiting on them, what they currently have out there, where
- * supply/demand is close enough to tip in their favor, and what the agent is quietly
- * doing without being asked. Every function here is pure and derived entirely from
- * existing state (matches/needs/offers/cards) — no new fields, no persisted signals.
- * A section with nothing to say returns an empty array; `today.tsx` hides it rather
- * than rendering an empty module.
+ * "My Market" — the derivations behind Home. Pure functions of state: decisions
+ * waiting on the viewer, their live positions, demand relevant to them, what the
+ * agent has done, and adjacent services after a transaction.
  */
 
-import { computeMarketValue, windowsFit } from '@/domain/matching';
-import type { AppState, Match, MatchCard, Person, TimeWindow } from '@/domain/types';
+import { matchesCapability, passesHardConstraints, windowsFit } from '@/domain/matching';
+import { describeEvent, isTerminal } from '@/domain/negotiation';
+import type { AppState, Booking, MatchCard, Negotiation, Person } from '@/domain/types';
 
-/* ------------------------------------------------- 1. Decisions waiting for me */
+export type Decision =
+  | { kind: 'counter'; negotiation: Negotiation }
+  | { kind: 'bids'; offerId: string; title: string; negotiations: Negotiation[] }
+  | { kind: 'pay' | 'deliver' | 'confirm' | 'feedback'; booking: Booking };
 
-/** Structured so callers can render either plain text or the charcoal "near-clearance" panel with the same numbers. */
-export interface Tension {
-  spread: number;
-  yourLabel: string; // "Your bid" (viewer buying) or "Your ask" (viewer selling)
-  yourAmount: number;
-  theirLabel: string; // "Ask" or "Bid" — the counterpart's side
-  theirAmount: number;
+function involves(b: Booking, viewerId: string): boolean {
+  return b.buyerId === viewerId || b.sellerId === viewerId;
 }
 
-export interface DecisionEntry {
-  match: Match;
-  personName: string;
-  headline: string; // "Claire came back at $220" / "Elena is ready to talk price"
-  tension?: Tension; // only when there's a real gap
-  favorable?: boolean; // currentPrice already clears the viewer's own constraint
-}
+/** Everything waiting on the viewer, most consequential first. */
+export function getDecisions(s: AppState, viewerId: string): Decision[] {
+  const out: Decision[] = [];
+  // 'countered' always means the turn is the viewer's: a counter, a held position, or an inbound bid.
+  const waiting = Object.values(s.negotiations).filter((n) => (n.buyerId === viewerId || n.sellerId === viewerId) && n.status === 'countered');
+  const inbound = waiting.filter((n) => n.listing.offerId && n.initiatorId !== viewerId);
+  const byOffer = new Map<string, Negotiation[]>();
+  inbound.forEach((n) => byOffer.set(n.listing.offerId!, [...(byOffer.get(n.listing.offerId!) ?? []), n]));
+  waiting.filter((n) => !inbound.includes(n)).forEach((negotiation) => out.push({ kind: 'counter', negotiation }));
+  byOffer.forEach((negotiations, offerId) => out.push({ kind: 'bids', offerId, title: negotiations[0].listing.title, negotiations }));
 
-/** The viewer's own stated number for this category — their budget ceiling as a buyer, their floor as a seller. Undefined when they have no active mission in this category to compare against. */
-function ownConstraint(match: Match, viewer: Person): { label: string; amount: number } | undefined {
-  if (match.kind === 'offer') {
-    const need = viewer.needs.find((n) => n.category === match.category);
-    return need ? { label: 'maximum', amount: need.budgetMax } : undefined;
+  for (const b of s.bookings.filter((x) => involves(x, viewerId))) {
+    const buyer = b.buyerId === viewerId;
+    if (b.status === 'agreed' && buyer) out.push({ kind: 'pay', booking: b });
+    else if (b.status === 'paid' && !buyer) out.push({ kind: 'deliver', booking: b });
+    else if (b.status === 'delivered' && buyer) out.push({ kind: 'confirm', booking: b });
+    else if (b.status === 'complete' && (buyer ? b.feedback.byBuyer : b.feedback.bySeller) === undefined) out.push({ kind: 'feedback', booking: b });
   }
-  const offer = viewer.offers.find((o) => o.category === match.category);
-  return offer?.floorPrice !== undefined ? { label: 'minimum', amount: offer.floorPrice } : undefined;
+  return out;
 }
 
-export function getDecisions(matches: Record<string, Match>, people: Record<string, Person>, viewer: Person): DecisionEntry[] {
-  return Object.values(matches)
-    .filter((m) => m.status === 'mutual' || m.status === 'negotiating')
-    .map((match) => {
-      const person = people[match.personId];
-      const personName = person?.name.split(' ')[0] ?? 'They';
-      const constraint = ownConstraint(match, viewer);
-      const gap = constraint
-        ? match.kind === 'offer'
-          ? match.currentPrice - constraint.amount
-          : constraint.amount - match.currentPrice
-        : undefined;
-
-      const headline =
-        match.status === 'negotiating'
-          ? `${personName} came back at $${match.currentPrice}`
-          : `${personName} is ready to talk price on ${match.title.toLowerCase()}`;
-
-      if (constraint && gap !== undefined && gap > 0) {
-        const isBuyer = match.kind === 'offer';
-        return {
-          match,
-          personName,
-          headline,
-          tension: {
-            spread: gap,
-            yourLabel: isBuyer ? 'Your bid' : 'Your ask',
-            yourAmount: constraint.amount,
-            theirLabel: isBuyer ? 'Ask' : 'Bid',
-            theirAmount: match.currentPrice,
-          },
-        };
-      }
-      if (constraint && gap !== undefined && gap <= 0 && match.status === 'negotiating') {
-        return { match, personName, headline, favorable: true };
-      }
-      return { match, personName, headline };
-    })
-    .sort((a, b) => (a.tension ? -1 : 0) - (b.tension ? -1 : 0)); // tension cases first — they're the ones actually asking for a call
-}
-
-/* ------------------------------------------------- 2. What I have in the market */
-
-export interface PortfolioEntry {
+export interface PositionSummary {
   kind: 'need' | 'offer';
   id: string;
   title: string;
   category: string;
-  matchCount: number;
-  negotiatingCount: number;
-  watching: boolean;
+  price: number;
+  unit: string;
+  state: string;
+  live: boolean;
 }
 
-export function getPortfolio(viewer: Person, matches: Record<string, Match>, cards: MatchCard[]): PortfolioEntry[] {
-  const activeMatches = Object.values(matches);
-  // Same hard timing gate recommendations.tsx uses — a count that doesn't actually
-  // fit the window would send the user to an empty recommendations screen.
-  const entryFor = (kind: 'need' | 'offer', item: { id: string; title: string; category: string; window: TimeWindow; howLong?: string }): PortfolioEntry => {
-    const complementKind = kind === 'need' ? 'offer' : 'need';
-    const matchCount = cards.filter((c) => c.category === item.category && c.kind === complementKind && windowsFit(item.window, c.window)).length;
-    const negotiatingCount = activeMatches.filter((m) => m.category === item.category && m.status === 'negotiating').length;
-    return { kind, id: item.id, title: item.title, category: item.category, matchCount, negotiatingCount, watching: item.howLong === 'watching' };
-  };
-  return [...viewer.needs.map((n) => entryFor('need', n)), ...viewer.offers.map((o) => entryFor('offer', o))];
+/** The viewer's own Needs and Offers, each with its current market state. */
+export function getPositions(s: AppState, viewer: Person): PositionSummary[] {
+  const negs = Object.values(s.negotiations);
+  const needs = viewer.needs.map((n): PositionSummary => {
+    const active = negs.filter((x) => x.buyerId === viewer.id && x.listing.category === n.category && !isTerminal(x));
+    const matches = s.cards.filter((c) => c.kind === 'offer' && c.category === n.category && windowsFit(n.window, c.window)).length;
+    return {
+      kind: 'need',
+      id: n.id,
+      title: n.title,
+      category: n.category,
+      price: n.budgetMax,
+      unit: n.unit,
+      state: active.length > 0 ? 'Negotiating' : n.howLong === 'watching' ? 'Watching the market' : `${matches} matching offer${matches === 1 ? '' : 's'}`,
+      live: active.length > 0,
+    };
+  });
+  const offers = viewer.offers.map((o): PositionSummary => {
+    const bids = negs.filter((x) => x.listing.offerId === o.id && !isTerminal(x));
+    return {
+      kind: 'offer',
+      id: o.id,
+      title: o.title,
+      category: o.category,
+      price: o.price,
+      unit: o.unit,
+      state: bids.length > 0 ? `${bids.length} bid${bids.length === 1 ? '' : 's'} received` : o.capacityHours ? `${o.capacityHours} hours released` : 'Open',
+      live: bids.length > 0,
+    };
+  });
+  return [...needs, ...offers];
 }
 
-/* --------------------------------------------- 3. Almost-clearable — timing only */
+/** Open demand in the categories the viewer's capability covers — earning opportunities, never auto-posted offers. */
+export function getRelevantDemand(s: AppState, viewer: Person): MatchCard[] {
+  const engaged = new Set(Object.values(s.negotiations).filter((n) => !isTerminal(n)).map((n) => n.listing.cardId));
+  return s.cards.filter((c) => matchesCapability(c, viewer) && !s.passedCardIds.includes(c.id) && !engaged.has(c.id)).slice(0, 3);
+}
 
-/**
- * Price-gap near-misses are already folded into getDecisions (they're an active
- * match, which already needs a decision). This covers the other near-miss: a card
- * that doesn't qualify yet purely on timing, but would with a little more slack —
- * the "move your deadline by 2 days" insight. `SLACK_HOURS` is the widening tried.
- */
-const SLACK_HOURS = 48;
+/** Offers that fit the viewer's open Needs. */
+export function getSupplyForNeeds(s: AppState, viewer: Person): MatchCard[] {
+  const categories = new Set(viewer.needs.map((n) => n.category));
+  return s.cards.filter((c) => c.kind === 'offer' && categories.has(c.category) && passesHardConstraints(c, viewer) && !s.passedCardIds.includes(c.id)).slice(0, 3);
+}
 
-export interface TimingOpportunity {
+export interface ActivityLine {
   id: string;
-  title: string;
-  category: string;
-  kind: 'need' | 'offer';
-  unlockCount: number;
+  at: string;
+  text: string;
+  negotiationId: string;
 }
 
-export function getTimingOpportunities(viewer: Person, cards: MatchCard[]): TimingOpportunity[] {
-  const widen = (w: TimeWindow): TimeWindow => ({ ...w, endHour: w.endHour + SLACK_HOURS });
-  const results: TimingOpportunity[] = [];
-
-  const scan = (kind: 'need' | 'offer', items: { id: string; title: string; category: string; window: TimeWindow }[]) => {
-    const complementKind = kind === 'need' ? 'offer' : 'need';
-    for (const item of items) {
-      const pool = cards.filter((c) => c.category === item.category && c.kind === complementKind);
-      const unlockCount = pool.filter((c) => !windowsFit(item.window, c.window) && windowsFit(widen(item.window), c.window)).length;
-      if (unlockCount > 0) results.push({ id: item.id, title: item.title, category: item.category, kind, unlockCount });
-    }
-  };
-  scan('need', viewer.needs);
-  scan('offer', viewer.offers);
-  return results;
+/** What the agent has actually done: the latest real events across the viewer's negotiations. */
+export function getAgentActivity(s: AppState, viewerId: string, limit = 4): ActivityLine[] {
+  const nameOf = (id: string) => s.people[id]?.name ?? 'Someone';
+  return Object.values(s.negotiations)
+    .filter((n) => n.buyerId === viewerId || n.sellerId === viewerId)
+    .flatMap((n) => n.events.map((e) => ({ id: e.id, at: e.at, text: describeEvent(e, viewerId, nameOf), negotiationId: n.id })))
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, limit);
 }
 
-/* --------------------------------------------------- 4. Working in your favor */
+/** Services that commonly follow one another — the basis for post-transaction suggestions. */
+export const ADJACENT_CATEGORIES: Record<string, string[]> = {
+  finance: ['ma-advisory', 'tax'],
+  'ma-advisory': ['strategy', 'tax'],
+  strategy: ['finance'],
+  tax: ['finance'],
+  advisory: ['finance', 'strategy'],
+};
 
-export interface FavorEntry {
-  cardId: string;
-  personName: string;
-  title: string;
-  valueLabel: string;
-  forTitle: string; // the viewer's own need/offer this is relevant to
-}
-
-/** Best good-value card in a category the viewer has an active need/offer for, not already in a match. */
-export function getMarketFavor(viewer: Person, matches: Record<string, Match>, cards: MatchCard[], people: Record<string, Person>, categories: AppState['categories']): FavorEntry[] {
-  const matchedCardIds = new Set(Object.values(matches).map((m) => m.cardId));
-  const categoryById = Object.fromEntries(categories.map((c) => [c.id, c]));
-  const favors: FavorEntry[] = [];
-
-  for (const need of viewer.needs) {
-    const pool = cards.filter(
-      (c) => c.category === need.category && c.kind === 'offer' && !matchedCardIds.has(c.id) && windowsFit(need.window, c.window)
-    );
-    const best = pool
-      .map((c) => ({ card: c, value: computeMarketValue(c, categoryById[c.category]) }))
-      .filter((x) => x.value.isGoodValue)
-      .sort((a, b) => b.value.deltaPct - a.value.deltaPct)[0];
-    if (best) {
-      favors.push({
-        cardId: best.card.id,
-        personName: people[best.card.personId]?.name.split(' ')[0] ?? 'Someone',
-        title: best.card.title,
-        valueLabel: best.value.label,
-        forTitle: need.title,
-      });
-    }
-  }
-  return favors;
-}
-
-/* ------------------------------------------------ 5. What DemandOne is doing */
-
-export function getAgentActivity(viewer: Person, matches: Record<string, Match>, cards: MatchCard[]): string[] {
-  const lines: string[] = [];
-  const negotiating = Object.values(matches).filter((m) => m.status === 'negotiating').length;
-  if (negotiating > 0) lines.push(`Negotiating with ${negotiating} match${negotiating === 1 ? '' : 'es'}`);
-
-  const matchedCategories = new Set(Object.values(matches).map((m) => m.category));
-  const watchAndFind = (kind: 'need' | 'offer', items: { title: string; category: string; window: TimeWindow; howLong?: string }[]) => {
-    const complementKind = kind === 'need' ? 'offer' : 'need';
-    for (const item of items) {
-      if (item.howLong === 'watching') {
-        lines.push(`Watching for ${item.title.toLowerCase()}`);
-      } else if (!matchedCategories.has(item.category)) {
-        const count = cards.filter((c) => c.category === item.category && c.kind === complementKind && windowsFit(item.window, c.window)).length;
-        if (count > 0) lines.push(`Found ${count} potential match${count === 1 ? '' : 'es'} for ${item.title.toLowerCase()}`);
-      }
-    }
-  };
-  watchAndFind('need', viewer.needs);
-  watchAndFind('offer', viewer.offers);
-  return lines;
-}
-
-/* ------------------------------------------- 6. Opportunities for what you offer */
-
-export interface CapabilityOpportunity {
-  categoryId: string;
-  categoryLabel: string;
-  needCount: number;
-}
-
-/**
- * Not a match or a listing — just "demand exists where your capability profile
- * says you're relevant," derived fresh from the same `cards` Discover already
- * uses. Tapping one hands off to intent-results (see today.tsx) pre-filled with
- * the profile's own summary — the only place a real Offer is ever created; this
- * never auto-posts one itself.
- */
-export function getCapabilityOpportunities(viewer: Person, cards: MatchCard[], categories: AppState['categories']): CapabilityOpportunity[] {
-  const categoryById = Object.fromEntries(categories.map((c) => [c.id, c]));
-  const results: CapabilityOpportunity[] = [];
-  for (const categoryId of viewer.capability?.categories ?? []) {
-    const needCount = cards.filter((c) => c.category === categoryId && c.kind === 'need').length;
-    if (needCount > 0) results.push({ categoryId, categoryLabel: categoryById[categoryId]?.label ?? categoryId, needCount });
-  }
-  return results;
-}
-
-/* ------------------------------------------------- 7. Trust/network relevance */
-
-export function getNetworkRelevance(matches: Record<string, Match>, people: Record<string, Person>): string | undefined {
-  const withPaths = Object.values(matches)
-    .map((m) => people[m.personId])
-    .find((p) => p && p.trustPaths > 0);
-  if (!withPaths) return undefined;
-  const name = withPaths.name.split(' ')[0];
-  return `${withPaths.trustPaths} ${withPaths.trustPaths === 1 ? 'person' : 'people'} in your network ${withPaths.trustPaths === 1 ? 'has' : 'have'} worked with ${name}.`;
+/** Listings adjacent to a completed or agreed transaction, on the same side of the market. */
+export function getAdjacentListings(s: AppState, booking: Booking, viewerId: string): MatchCard[] {
+  const kind = booking.buyerId === viewerId ? 'offer' : 'need';
+  const adjacent = ADJACENT_CATEGORIES[booking.category] ?? [];
+  return s.cards.filter((c) => c.kind === kind && adjacent.includes(c.category) && !s.passedCardIds.includes(c.id)).slice(0, 3);
 }

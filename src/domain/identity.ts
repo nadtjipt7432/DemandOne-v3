@@ -60,6 +60,75 @@ export function createProfile(personId: string, input: SignupInput): Person {
   };
 }
 
+export interface ProfilePatch {
+  name?: string;
+  location?: string;
+  background?: string;
+  /** Free text — one link per line or comma-separated. */
+  links?: string;
+}
+
+export type ProfileErrors = Partial<Record<keyof ProfilePatch, string>>;
+
+export const MAX_LINKS = 5;
+
+/** Normalizes "linkedin.com/in/x" → "https://linkedin.com/in/x"; undefined if it isn't a plausible web address. */
+export function normalizeLink(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    return /\.[a-z]{2,}$/i.test(url.hostname) ? url.toString().replace(/\/$/, '') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function splitLinks(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Validates a profile edit. Returns the cleaned values to save, or field errors.
+ * Location may be empty (shown as "Not set") — it is never filled in for the user.
+ */
+export function validateProfile(patch: ProfilePatch): { ok: true; values: { name?: string; location?: string; background?: string; links?: string[] } } | { ok: false; errors: ProfileErrors } {
+  const errors: ProfileErrors = {};
+  const values: { name?: string; location?: string; background?: string; links?: string[] } = {};
+  if (patch.name !== undefined) {
+    const name = patch.name.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) errors.name = 'Enter your name (at least 2 characters).';
+    else if (name.length > 60) errors.name = 'Keep your name under 60 characters.';
+    else values.name = name;
+  }
+  if (patch.location !== undefined) {
+    const location = patch.location.trim().replace(/\s+/g, ' ');
+    if (location.length > 80) errors.location = 'Keep the location under 80 characters.';
+    else if (location && !/[a-z]/i.test(location)) errors.location = 'Enter a place name, e.g. Manchester.';
+    else values.location = location;
+  }
+  if (patch.background !== undefined) {
+    const background = patch.background.trim();
+    if (background.length > 600) errors.background = 'Keep your background under 600 characters.';
+    else values.background = background;
+  }
+  if (patch.links !== undefined) {
+    const raw = splitLinks(patch.links);
+    if (raw.length > MAX_LINKS) errors.links = `Add up to ${MAX_LINKS} links.`;
+    else {
+      const normalized = raw.map(normalizeLink);
+      const bad = raw.find((_, i) => !normalized[i]);
+      if (bad) errors.links = `"${bad}" doesn't look like a web address.`;
+      else values.links = normalized as string[];
+    }
+  }
+  return Object.keys(errors).length > 0 ? { ok: false, errors } : { ok: true, values };
+}
+
 /** Where a session should be, given the account state. */
 export function homeRouteFor(account: DeviceAccount | null, signedIn: boolean): string {
   if (!account || !signedIn) return '/';

@@ -1,153 +1,104 @@
 /**
- * Domain types for DemandOne V3 (Phase 1: identity/persistence; market types carried
- * over from V2 until the Phase 2 mandate/deal model replaces them).
+ * Domain types for DemandOne V3.
  *
- * The product idea: everyone is both buyer and seller (one `Person`, two symmetric
- * lists — `needs` and `offers`). The Exchange is a ranked, scrollable directory — not
- * filtered down to a sliver, so listings can be compared side by side — but ordered
- * by a transparent "fit" score computed from the viewer's own `StandardOfValue`
- * ranking, never an unexplained percentage.
+ * Everyone is both buyer and seller: one `Person` with `needs` and `offers`. The
+ * Exchange lists other people's open positions (`MatchCard`) — public data only.
+ * Private limits (a seller's minimum, a buyer's maximum) never live on a listing;
+ * they sit in `AppState.privateLimits`, read only by the negotiation engine.
  *
- * A `liquiditySignal` and similar internal-only fields drive quiet ranking/pricing
- * behavior but are never rendered directly — screens only ever show narrated
- * outcomes (see matching.ts and service.ts).
+ * A negotiation is one shared record (`Negotiation`) both parties reference, and an
+ * agreement becomes one shared transaction (`Booking`) with a buyer and a seller.
  */
 
 export type TrustTier = 'everyday' | 'trades' | 'expert';
 
-/**
- * Per the PRD: hard constraints → soft boundaries → preferences. Timing is a hard
- * constraint (either it fits your window or it doesn't — see `matching.ts`'s
- * `passesHardConstraints`), not a rankable preference, so it is deliberately not a
- * `Criterion`. These four are the weighted, rankable Standard of Value.
- */
+/** The weighted, rankable Standard of Value. Timing is a hard constraint, not a criterion. */
 export type Criterion = 'budget' | 'expertise' | 'geography' | 'trust';
 
-/** Hours-from-now interval. Simple enough to fabricate in fixtures, real enough to overlap-check. */
+/** Hours-from-now interval — real enough to overlap-check. */
 export interface TimeWindow {
   startHour: number;
   endHour: number;
-  label: string; // e.g. "Sat 8am–1pm"
+  label: string; // e.g. "Oct 13–17"
 }
 
 export interface Category {
   id: string;
   label: string;
-  icon: string; // Feather icon name
-  /** External benchmark price for this category — what comparable listings elsewhere charge. */
-  marketAvgPrice: number;
+  /** A sensible default price when someone posts in this category — a starting suggestion, never a market claim. */
+  typicalPrice: number;
 }
 
-/** The user's ranked priorities. Order, not raw weights — see matching.ts for the conversion. */
 export interface StandardOfValue {
   order: Criterion[]; // length 4, most → least important
 }
 
-/** How long the agent should keep looking — the PRD/memo's "standing demand" idea, kept minimal. */
+/** How long the agent keeps looking: once, or standing demand. */
 export type HowLong = 'once' | 'watching';
 
-/**
- * Timing as a first-class market variable (not just a date field). `window` is always
- * populated — derived from whichever preset the user picked — so the existing hard-constraint
- * check (`windowsFit` in matching.ts) keeps working unchanged regardless of how the timing was
- * expressed. `deadlineLabel` is the plain-language echo shown in the mandate summary.
- */
 export type TimingType = 'asap' | 'date' | 'window' | 'flexible';
 export interface TimingSpec {
   type: TimingType;
-  deadlineLabel?: string; // e.g. "By Oct 3"
+  deadlineLabel?: string;
   window: TimeWindow;
 }
 
-/** "How much work" — buyer side. */
-export type Effort = 'one-time' | 'few-hours' | 'several-days' | 'ongoing' | 'not-sure';
-/** "How much capacity" — seller side. */
-export type Capacity = 'one-project' | 'few-hours' | 'part-time' | 'multiple-clients' | 'ongoing';
 export type LocationMode = 'remote' | 'in-person' | 'hybrid';
 
-/** How much room the agent has to negotiate — mandate copy; see createFromText/intent-results. */
-export type BuyerAuthority = 'none' | 'within-range' | 'best-deal';
-export type SellerAuthority = 'none' | 'within-bounds' | 'toward-target';
+/** What the price is for. */
+export type PriceUnit = 'fixed' | 'hour' | 'sprint';
 
-/**
- * The Exchange's Work filter dimension — six deliberately broad categories
- * describing the TYPE of value exchanged (not a profession/industry). Defined
- * here (not in intents.ts, which does the actual inference) so this file never
- * has to import from intents.ts — intents.ts re-exports it for the one existing
- * import site (discover.tsx).
- */
+/** Broad type of value exchanged (advise/analyze/...), inferred from text. */
 export type WorkCategory = 'advise' | 'analyze' | 'build' | 'operate' | 'connect' | 'create';
 
 /**
- * What someone says they *could* offer — deliberately not an `Offer`. An `Offer`
- * is live in the exchange with a price and terms; a capability profile is just a
- * standing description DemandOne can match demand against and suggest from. The
- * user decides, separately and explicitly, when (and whether) to turn a
- * suggestion into a real posted Offer — see intent-results.tsx's existing
- * createFromText flow, which this reuses rather than auto-posting anything.
+ * What someone says they could offer — not an Offer. It informs matching and
+ * suggested opportunities; posting an Offer is always a separate, explicit act.
  */
 export interface CapabilityProfile {
-  summary: string; // the raw natural-language text — never fabricated beyond this
-  categories: string[]; // Category ids, inferred then user-editable
+  summary: string;
+  categories: string[];
   workTypes: WorkCategory[];
   locationMode?: LocationMode;
   availabilityNote?: string;
 }
 
+/** One of the viewer's own Needs. `budgetMax` is the viewer's private maximum. */
 export interface Need {
   id: string;
   personId: string;
-  category: string; // Category id
+  category: string;
   title: string;
   description: string;
   budgetMax: number;
+  unit: PriceUnit;
   window: TimeWindow;
   distanceMax: number;
   howLong?: HowLong;
   timing: TimingSpec;
-  effort: Effort;
   locationMode: LocationMode;
-  location?: string;
-  /** Comfortable range low — budgetMax is already the hard "ask before exceeding" ceiling. */
-  budgetMin?: number;
-  authority: BuyerAuthority;
-  /** Up to 3, ranked by selection order — overrides the viewer's global Standard of Value for this mission's matches. */
   priorities: Criterion[];
+  createdAt: string;
 }
 
+/** One of the viewer's own Offers. `floorPrice` is the viewer's private minimum. */
 export interface Offer {
   id: string;
   personId: string;
-  category: string; // Category id
+  category: string;
   title: string;
   description: string;
   price: number;
+  unit: PriceUnit;
+  floorPrice?: number;
   window: TimeWindow;
   howLong?: HowLong;
-  /** Basic clearing rule, same as MatchCard's (PRD: "provider floor... fixed vs negotiable"). Defaults to negotiable with no set floor when absent. */
-  negotiable?: boolean;
-  floorPrice?: number;
   timing: TimingSpec;
-  capacity: Capacity;
+  /** Hours released to the market, when the offer is time-based. */
+  capacityHours?: number;
   locationMode: LocationMode;
-  location?: string;
-  authority: SellerAuthority;
   priorities: Criterion[];
-  /** "Great fit" / "not a fit" one-liner, display only. */
-  fitNote?: string;
-}
-
-/**
- * A single concrete, named working relationship — the trust-graph "who actually
- * worked with whom" evidence, distinct from `trustPaths`' plain count. Populated only
- * where the demo data actually has a named relationship to show; most people have
- * none, which is the honest default (a count without a name is still real trust
- * evidence, just thinner).
- */
-export interface Reference {
-  name: string;
-  context: string; // e.g. "Commercial diligence · 2026"
-  recommends: boolean;
+  createdAt: string;
 }
 
 export interface Person {
@@ -156,28 +107,30 @@ export interface Person {
   initials: string;
   location: string;
   tier: TrustTier;
-  /** DemandOne transactions this person has completed — quantified trust input, not a star rating. */
+  /** Verified completed DemandOne transactions. */
   completedCount: number;
-  /** Of those counterparts, how many said they'd work with this person again (see §2: "Would you recommend / work with this person again? Yes/No"). */
+  /** Of those, how many counterparties said they'd work with this person again. */
   recommendCount: number;
-  trustPaths: number; // people the viewer knows who worked with this person
-  /** A single named example of who vouches for them, when the data has one — see `Reference`. */
-  reference?: Reference;
+  /** People the viewer knows who have worked with this person. */
+  trustPaths: number;
   verified: { identity: boolean; insurance: boolean; references: boolean };
-  /** One crisp, quantified sentence on why this person is credibly relevant — not a career history. */
+  /** One concise qualification statement. */
   bio: string;
-  distanceMi: number; // distance from the viewer's home reference point
-  responseRate: number; // 0–100
-  responseTimeLabel: string; // e.g. "usually replies in 20 min"
+  /** Professional background, in the person's own words. */
+  background?: string;
+  /** LinkedIn or proof-of-work links. */
+  links?: string[];
+  distanceMi: number;
+  responseRate: number;
+  responseTimeLabel: string;
   needs: Need[];
   offers: Offer[];
-  categories: string[]; // Category ids this person engages with, ranked to the top of the Exchange
+  categories: string[];
   standardOfValue: StandardOfValue;
-  /** Set once, at capability onboarding or later from Account — see CapabilityProfile's own doc comment for why this isn't an Offer. */
   capability?: CapabilityProfile;
 }
 
-export type CardKind = 'need' | 'offer'; // what the CARD's person is posting
+export type CardKind = 'need' | 'offer'; // what the listing's owner is posting
 
 export interface FitBreakdown {
   budget: number;
@@ -187,19 +140,31 @@ export interface FitBreakdown {
 }
 
 export interface Fit {
-  score: number; // 0–100
-  breakdown: FitBreakdown; // each 0–1
-  explanation: string[]; // plain-language lines, in the viewer's own priority order
+  score: number;
+  breakdown: FitBreakdown;
+  explanation: string[];
 }
 
-/** Objective — not personalized. How this price compares to the external category benchmark. */
+/** Price against comparable open listings in the exchange — only claimed with enough comparables. */
 export interface MarketValue {
-  deltaPct: number; // positive = good value, however that's defined for this card's kind
-  isGoodValue: boolean; // only true above a noticeable threshold, so it stays rare and meaningful
-  label: string; // e.g. "18% below typical rate"
+  deltaPct: number;
+  isGoodValue: boolean;
+  label: string;
 }
 
-/** A single listing in the Exchange — someone else's need or offer. */
+/** A public ask revision on a listing — real history, shown as "was £X". */
+export interface PriceRevision {
+  price: number;
+  at: string; // display label, e.g. "Oct 8"
+}
+
+export interface ListingCapacity {
+  total: number;
+  remaining: number;
+  unit: 'hours' | 'slots';
+}
+
+/** An open position in the Exchange — public data only. */
 export interface MatchCard {
   id: string;
   kind: CardKind;
@@ -208,76 +173,170 @@ export interface MatchCard {
   title: string;
   description: string;
   price: number;
+  unit: PriceUnit;
   window: TimeWindow;
+  /** Plain deadline or start, e.g. "IC in 25 days", "Due Oct 24". */
+  timingNote: string;
   distanceMi: number;
-  urgencyNote?: string; // narrated only, e.g. "2 spots left" — never a raw delta
-  /** Internal-only ranking/pricing pressure. Never rendered. -1..1 */
+  negotiable: boolean;
+  capacity?: ListingCapacity;
+  revisions?: PriceRevision[];
+  /** A real, time-sensitive event on this position, e.g. "Released today". */
+  marketEvent?: string;
+  /** Internal ranking pressure. Never rendered. */
   liquiditySignal: number;
-  /** Basic clearing rule (PRD: "provider floor... fixed vs negotiable... permitted concessions"). */
-  negotiable: boolean;
-  /** Offers only: the provider's floor — how far the agent can concede downward. */
-  floorPrice?: number;
-  /** Needs only: the requester's true hard ceiling — `price` is their opening ask, room to negotiate up to this. */
-  ceilingPrice?: number;
 }
 
-export type SwipeDecision = 'like' | 'pass';
+/* ------------------------------------------------------------- Negotiation */
 
-export type MatchStatus = 'pending' | 'mutual' | 'negotiating' | 'accepted' | 'booked' | 'passed';
+export type DeadlineOption = 'listed' | 'plus3' | 'plus7';
+export type ScopeOption = 'full' | 'one-revision' | 'core';
+export type PaymentOption = 'on-completion' | 'deposit' | 'upfront';
+export type VolumeOption = 'single' | 'recurring';
 
-export interface MatchMessage {
-  from: 'agent' | 'them' | 'you';
-  text: string;
-  price?: number;
+/** A complete set of terms. Every proposal carries one. */
+export interface Terms {
+  price: number;
+  deadline: DeadlineOption;
+  scope: ScopeOption;
+  payment: PaymentOption;
+  volume: VolumeOption;
 }
 
-export interface Match {
+export type Side = 'buyer' | 'seller';
+export type ProposalKind = 'ask' | 'bid' | 'counter' | 'revised';
+
+export interface Proposal {
   id: string;
-  cardId: string;
-  personId: string; // counterpart
-  title: string; // the card's title, copied — it may leave the Exchange before this books
-  status: MatchStatus;
-  firstPrice: number;
-  currentPrice: number;
-  timeline: MatchMessage[];
-  /** Copied from the source card at creation time — the card itself may since have left the Exchange. */
-  negotiable: boolean;
-  floorPrice?: number;
-  ceilingPrice?: number;
-  /** Also copied from the source card — which side the viewer is on, for the eventual booking. */
-  kind: CardKind;
-  category: string;
-  window: TimeWindow;
+  by: Side;
+  partyId: string;
+  kind: ProposalKind;
+  terms: Terms;
+  at: string;
+  /** listing = the public opening position; agent = proposed by a party's agent; final = a last offer. */
+  source: 'listing' | 'agent';
+  final?: boolean;
 }
 
 /**
- * confirmed → live → delivered → complete. `delivered` is the seller marking the
- * work ready; only the buyer's own confirmation (never the seller's own action)
- * can move a booking on from there to `complete` — see `markDelivered`/
- * `confirmFulfillment` in service.ts.
+ * evaluating → awaiting_response → countered ⇄ (revised proposal) → accepted → cleared,
+ * with rejected / expired / withdrawn as terminal exits.
  */
-export type BookingStatus = 'confirmed' | 'live' | 'delivered' | 'complete';
+export type NegotiationStatus =
+  | 'evaluating'
+  | 'awaiting_response'
+  | 'countered'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'withdrawn'
+  | 'cleared';
 
-/** Which side of this transaction the viewer is on — buyer pays and saves, seller earns. */
-export type BookingRole = 'buyer' | 'seller';
+export type NegotiationEventType =
+  | 'evaluated'
+  | 'proposal_submitted'
+  | 'counter_received'
+  | 'held'
+  | 'tradeoff_identified'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'withdrawn'
+  | 'cleared';
 
+/** Structured, so each party's view can phrase it from their side ("You bid…" vs "Jordan bid…"). */
+export interface NegotiationEvent {
+  id: string;
+  at: string;
+  type: NegotiationEventType;
+  actorId?: string;
+  proposalId?: string;
+  price?: number;
+  /** Term changes relative to the previous position, in plain language. */
+  changes?: string[];
+  /** evaluated: how many compatible positions were compared, and where this one ranked. */
+  compared?: number;
+  rank?: number;
+  reason?: 'too-far' | 'final-not-met' | 'expired';
+}
+
+/** The position being negotiated, snapshotted so the record stands on its own. */
+export interface ListingSnapshot {
+  kind: CardKind; // the listing owner's side: 'offer' = owner sells
+  ownerId: string;
+  title: string;
+  category: string;
+  unit: PriceUnit;
+  timingLabel: string;
+  cardId?: string;
+  offerId?: string;
+}
+
+/** One record, shared by buyer and seller. */
+export interface Negotiation {
+  id: string;
+  listing: ListingSnapshot;
+  buyerId: string;
+  sellerId: string;
+  initiatorId: string;
+  status: NegotiationStatus;
+  proposals: Proposal[];
+  /** How many times the responding counterparty has answered — the concession round. */
+  responses: number;
+  maxRounds: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt?: string;
+  agreedProposalId?: string;
+  bookingId?: string;
+  events: NegotiationEvent[];
+}
+
+/* ------------------------------------------------------------ Transactions */
+
+/** agreed → paid (held in escrow, demo) → delivered → complete. */
+export type BookingStatus = 'agreed' | 'paid' | 'delivered' | 'complete';
+
+export interface Fees {
+  buyerFee: number;
+  buyerTotal: number;
+  sellerFee: number;
+  sellerNet: number;
+}
+
+/** One transaction record, shared by buyer and seller. */
 export interface Booking {
   id: string;
-  personId: string;
-  service: string;
-  when: string;
-  distanceMi: number;
-  price: number;
+  negotiationId: string;
+  title: string;
+  category: string;
+  unit: PriceUnit;
+  buyerId: string;
+  sellerId: string;
+  terms: Terms;
+  /** The opening public price — the honest reference for "below the initial ask". */
+  openingPrice: number;
+  fees: Fees;
   status: BookingStatus;
-  role: BookingRole;
-  category?: string; // for the seller-side "earned above typical rate" callout
-  /** Structured, so a new booking can be checked against it for a schedule conflict. */
+  deliveryLabel: string;
   window?: TimeWindow;
-  savedAmount?: number;
-  verifiedLine: string;
-  /** Set once post-transaction feedback (submitFeedback) has run — guards against resubmitting. */
-  feedbackGiven?: boolean;
+  payment?: { methodLabel: string; authorizedAt: string; demo: true };
+  deliveredAt?: string;
+  completedAt?: string;
+  feedback: { byBuyer?: boolean; bySeller?: boolean };
+  createdAt: string;
 }
+
+/* ------------------------------------------------------------------- Voice */
+
+export interface VoiceTurn {
+  id: string;
+  from: 'user' | 'agent';
+  text: string;
+  at: string;
+}
+
+/* ------------------------------------------------------------------- State */
 
 export interface Permission {
   key: string;
@@ -290,17 +349,12 @@ export type NotificationPref = 'live' | 'daily' | 'weekly' | 'off';
 
 export interface PaymentMethod {
   id: string;
-  label: string; // e.g. "Visa ending 6411"
+  label: string;
 }
 
-/** Where a signed-in account is in onboarding. Each step writes into the real profile. */
 export type OnboardingStep = 'capability' | 'values' | 'done';
 
-/**
- * The one local account on this device (the mock backend is single-device). Kept
- * when signed out, so signing back in with the same email restores everything.
- * `personId` points at the account's public profile in `people`.
- */
+/** The one local account on this device. Kept when signed out. */
 export interface DeviceAccount {
   personId: string;
   email: string;
@@ -313,13 +367,19 @@ export interface AppState {
   signedIn: boolean;
   themeMode: 'light' | 'dark';
   notificationPref: NotificationPref;
+  /** Read agent replies aloud (browser speech synthesis). */
+  speakReplies: boolean;
   paymentMethods: PaymentMethod[];
   defaultPaymentId?: string;
   people: Record<string, Person>;
   cards: MatchCard[];
-  matches: Record<string, Match>;
+  /** Private limits: cardId → the listing owner's private reservation price. Engine-only. */
+  reservations: Record<string, number>;
+  /** Private limits per negotiation: negotiationId → partyId → reservation. Engine-only, except a party's own. */
+  privateLimits: Record<string, Record<string, number>>;
+  negotiations: Record<string, Negotiation>;
   bookings: Booking[];
+  passedCardIds: string[];
   permissions: Permission[];
-  /** Static reference data — always taken from the seed, never from storage. */
   categories: Category[];
 }

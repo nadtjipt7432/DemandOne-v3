@@ -1,5 +1,6 @@
 import { delay, nowIso } from '@/infra/clock';
-import { createProfile, normalizeEmail, type SignupInput } from '@/domain/identity';
+import { createProfile, deriveInitials, normalizeEmail, validateProfile, type ProfileErrors, type ProfilePatch, type SignupInput } from '@/domain/identity';
+import { initialState, seedCards, seedPeople, seedReservations } from '@/infra/seed';
 import { getState, id, resetStore, setState } from '@/state/store';
 import { applyThemeMode } from '@/theme';
 import { updateViewer, viewerOf } from './viewer';
@@ -30,6 +31,8 @@ export function storedAccountName(): string | undefined {
 export async function createAccount(input: SignupInput & { email: string }): Promise<void> {
   await delay(300);
   if (getState().account) throw new Error('This device already has an account');
+  const check = validateProfile({ name: input.name, location: input.location ?? '' });
+  if (!check.ok) throw new Error(Object.values(check.errors)[0]);
   const personId = id('u');
   const person = createProfile(personId, input);
   setState((s) => ({
@@ -59,9 +62,49 @@ export async function resetDevice(): Promise<void> {
   applyThemeMode(getState().themeMode);
 }
 
+/** Edit the signed-in person's profile. Validates first; nothing is saved when a field is invalid. */
+export async function updateProfile(patch: ProfilePatch): Promise<{ ok: true } | { ok: false; errors: ProfileErrors }> {
+  const result = validateProfile(patch);
+  if (!result.ok) return result;
+  await delay(200);
+  setState((s) =>
+    updateViewer(s, (v) => ({
+      ...v,
+      ...result.values,
+      ...(result.values.name ? { initials: deriveInitials(result.values.name) } : {}),
+    }))
+  );
+  return { ok: true };
+}
+
 export async function setLocation(location: string): Promise<void> {
-  await delay(150);
-  setState((s) => updateViewer(s, (v) => ({ ...v, location: location.trim() })));
+  await updateProfile({ location });
+}
+
+/**
+ * Reset the demo market — counterparties, listings, negotiations and transactions —
+ * without touching the signed-in person's profile, positions or settings.
+ */
+export async function resetDemoMarket(): Promise<void> {
+  await delay(300);
+  setState((s) => {
+    const viewer = viewerOf(s);
+    return {
+      ...s,
+      people: { ...seedPeople, [viewer.id]: { ...viewer, completedCount: 0, recommendCount: 0 } },
+      cards: seedCards,
+      reservations: seedReservations,
+      privateLimits: {},
+      negotiations: {},
+      bookings: [],
+      passedCardIds: [],
+      permissions: initialState.permissions,
+    };
+  });
+}
+
+export async function setSpeakReplies(on: boolean): Promise<void> {
+  setState((s) => ({ ...s, speakReplies: on }));
 }
 
 /**

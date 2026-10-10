@@ -1,3 +1,5 @@
+import { MIGRATIONS } from './migrations';
+
 /**
  * Versioned persistence for the app state.
  *
@@ -19,11 +21,9 @@ export interface KeyValueStorage {
 }
 
 export const STORAGE_KEY = 'demandone-v3';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
-/** `MIGRATIONS[n]` upgrades a version-n state to version n+1. Add one per schema bump. */
 type Migration = (state: unknown) => unknown;
-export const MIGRATIONS: Record<number, Migration> = {};
 
 interface Envelope {
   v: number;

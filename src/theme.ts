@@ -1,145 +1,127 @@
 /**
- * DemandOne v2 design tokens — calm, legible, light by default, with a manual dark
- * toggle (see You → Settings). One restrained accent (plus one warm second accent),
- * warm neutrals in both palettes, function-based radius (controls vs. surfaces vs.
- * genuine toggles — not one border-radius applied everywhere). No gradients/glows.
- * The product's intelligence shows up in what it does, not in how the screen looks.
+ * DemandOne V3 design tokens — "Living Paper" with Ledger's structure.
  *
- * `colors` is deliberately a plain mutable object, not a value picked by a hook —
- * nearly every screen does `import { colors } from '@/theme'` and reads `colors.bg`
- * etc. inline at render time. `applyThemeMode` reassigns its properties in place
- * (same object reference) so every one of those inline reads picks up the new
- * palette on the next render, with no per-screen changes needed. The one thing this
- * can't fix is a color baked into a module-level `StyleSheet.create` (evaluated once
- * at import) — those few spots (`base.tsx`, `domain.tsx`) compute their styles in a
- * function called per-render instead, for exactly this reason.
+ * Warm paper grounds, an editorial serif for narrative moments (Instrument Serif)
+ * and one sans with tabular numerals for everything operational (Geist). Forest
+ * marks the buy side and primary actions; amber marks the sell side. Rust and
+ * indigo exist only in ambient state fields, never as UI chrome.
+ *
+ * `colors` is a plain mutable object: `applyThemeMode` reassigns its properties
+ * in place so every inline read picks up the new palette on the next render.
  */
 
 export type ThemeMode = 'light' | 'dark';
 
-interface ColorPalette {
-  bg: string;
-  surface: string;
-  surface2: string;
-  border: string;
-  borderStrong: string;
-  text: string;
-  textDim: string;
-  textFaint: string;
-  accent: string;
-  accentText: string;
-  accentSoft: string;
-  accent2: string;
-  accent2Soft: string;
-  success: string;
-  successSoft: string;
+interface Palette {
+  bg: string; // paper
+  raised: string; // a lifted sheet on the paper (inputs, the rare panel)
+  sunk: string; // pressed / track
+  rule: string; // hairline
+  ruleStrong: string; // ledger rule under headers
+  ink: string;
+  inkDim: string;
+  inkFaint: string;
+  forest: string; // buy side, primary action
+  forestSoft: string;
+  onForest: string;
+  amber: string; // sell side, graphics
+  amberText: string; // amber that passes contrast as text
+  amberSoft: string;
+  rust: string; // declines, stop
+  indigo: string;
+  focus: string;
 }
 
-const lightColors: ColorPalette = {
-  bg: '#F7F6F2', // warm paper, not clinical white
-  surface: '#FFFFFF',
-  surface2: '#EFEEE9', // nested / pressed
-  border: '#E3E1DA', // hairline
-  borderStrong: '#C9C6BC',
-
-  text: '#201F1B',
-  textDim: '#6B6860',
-  textFaint: '#9B978C',
-
-  accent: '#2F5D4E', // deep pine — reads trust + value, not playful, not SaaS-blue
-  accentText: '#FFFFFF',
-  accentSoft: '#E4EBE7', // faint accent surface, used sparingly for state
-
-  // Second accent — golden hour amber. Doubles as the brand's warmth/personality
-  // color (the logomark's second circle, headline flourishes) AND urgency/attention
-  // text, so there's one warm color in the system, not two similar ambers.
-  accent2: '#D98F3F',
-  accent2Soft: '#F6E9D8',
-
-  success: '#2F5D4E', // same family as accent — one meaning, not a second color
-  successSoft: '#E4EBE7',
+const light: Palette = {
+  bg: '#F3EFE6',
+  raised: '#FAF7F0',
+  sunk: '#E8E2D5',
+  rule: '#DCD5C7',
+  ruleStrong: '#1B1C19',
+  ink: '#1B1C19',
+  inkDim: '#46443D',
+  inkFaint: '#6A675E',
+  forest: '#1F4A3E',
+  forestSoft: '#DCE5DD',
+  onForest: '#F6F2E8',
+  amber: '#C98A3A',
+  amberText: '#8A5716',
+  amberSoft: '#F1E2CA',
+  rust: '#9C4A2A',
+  indigo: '#2B3156',
+  focus: '#1F4A3E',
 };
 
-const darkColors: ColorPalette = {
-  bg: '#17181A', // warm near-black, not pure black
-  surface: '#1F2123',
-  surface2: '#26282B',
-  border: '#33353A',
-  borderStrong: '#46484D',
-
-  text: '#F2F1ED',
-  textDim: '#B5B2A8',
-  textFaint: '#7C7A73',
-
-  accent: '#6FB79A', // pine lightened for contrast on a dark ground
-  accentText: '#0D1F18',
-  accentSoft: '#1C2D27',
-
-  accent2: '#E3A05E',
-  accent2Soft: '#3A2C1A',
-
-  success: '#6FB79A',
-  successSoft: '#1C2D27',
+const dark: Palette = {
+  bg: '#151613',
+  raised: '#1D1E1A',
+  sunk: '#262722',
+  rule: '#2F302A',
+  ruleStrong: '#E9E4D8',
+  ink: '#EDE8DD',
+  inkDim: '#BDB7AA',
+  inkFaint: '#8F8A7E',
+  forest: '#86C2A7',
+  forestSoft: '#1F3029',
+  onForest: '#0F1B16',
+  amber: '#E0A55A',
+  amberText: '#E6B06C',
+  amberSoft: '#3A2D1B',
+  rust: '#D9825C',
+  indigo: '#9BA4E2',
+  focus: '#86C2A7',
 };
 
-/** The live palette — see the module comment for why this is mutated in place, not replaced. */
-export const colors: ColorPalette = { ...lightColors };
+export const colors: Palette = { ...light };
 
 export function applyThemeMode(mode: ThemeMode): void {
-  Object.assign(colors, mode === 'dark' ? darkColors : lightColors);
+  Object.assign(colors, mode === 'dark' ? dark : light);
 }
 
-/**
- * Fixed ambient-gradient stops for the "Market Field" halftone device (see
- * MarketField.tsx) and the charcoal "near-clearance" editorial panel (see
- * MarketMoment in domain.tsx). Deliberately NOT part of the mutable `colors`
- * object above — this is a fixed brand device (like the logomark's two colors),
- * not something that should flip with the light/dark toggle.
- */
-export const marketField = {
-  forest: '#2F5D4E',
-  amber: '#D98F3F',
-  rust: '#A6542E',
-  charcoal: '#1C1512',
-  charcoalSurface: '#241B16',
-  charcoalText: '#F3EFE9',
-  charcoalTextDim: '#C9BFB3',
+/** Fixed brand fields for the dark landing and ambient states — independent of theme. */
+export const field = {
+  night: '#121513',
+  nightInk: '#F2EDE2',
+  nightDim: '#BDB6A6',
+  forest: '#1F4A3E',
+  amber: '#C98A3A',
+  rust: '#9C4A2A',
+  indigo: '#2B3156',
+  charcoal: '#1F2022',
 } as const;
 
-/** 4pt spacing scale */
-export const space = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 28,
-  xxxl: 40,
+export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
+
+/** Controls round; sheets barely; pills only for genuine toggles and the mic. */
+export const radius = { control: 10, sheet: 4, pill: 999 } as const;
+
+/** The content column on wide screens — the product stays a composed page, not a dashboard. */
+export const MAX_WIDTH = 600;
+
+export const fonts = {
+  serif: 'InstrumentSerif_400Regular',
+  serifItalic: 'InstrumentSerif_400Regular_Italic',
+  sans: 'Geist_400Regular',
+  sansMedium: 'Geist_500Medium',
+  sansBold: 'Geist_600SemiBold',
 } as const;
 
-/** Function-based, not uniform: controls round more than surfaces do. */
-export const radius = {
-  control: 8, // buttons, inputs, filter/segmented tabs
-  surface: 4, // the rare row/card that's a genuinely discrete object
-  pill: 999, // genuine status/toggle pills only
-} as const;
+const tab = { fontVariant: ['tabular-nums' as const, 'lining-nums' as const] };
 
-// The one bit of typographic personality: a characterful serif for headline
-// moments only (landing, "Handled.", the Standard of Value title) — everything
-// else stays on the plain system sans so the product still reads calm and fast.
-export const fontDisplay = 'Fraunces_600SemiBold';
-export const fontDisplayItalic = 'Fraunces_500Medium_Italic';
-
+/** Type scale: serif for narrative, sans for everything operational. Numbers always tabular. */
 export const type = {
-  display: { fontSize: 34, lineHeight: 40, fontWeight: '600' as const, letterSpacing: -0.4 },
-  title: { fontSize: 26, lineHeight: 32, fontWeight: '600' as const, letterSpacing: -0.2 },
-  heading: { fontSize: 20, lineHeight: 26, fontWeight: '600' as const },
-  body: { fontSize: 16, lineHeight: 23, fontWeight: '400' as const },
-  bodyStrong: { fontSize: 16, lineHeight: 23, fontWeight: '600' as const },
-  small: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
-  smallStrong: { fontSize: 14, lineHeight: 20, fontWeight: '600' as const },
-  // Genuine micro-metadata (a count, a timestamp) — never a section-header pattern.
-  label: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  hero: { fontFamily: fonts.serif, fontSize: 46, lineHeight: 48, letterSpacing: -0.6 },
+  display: { fontFamily: fonts.serif, fontSize: 36, lineHeight: 40, letterSpacing: -0.4 },
+  title: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 32, letterSpacing: -0.2 },
+  heading: { fontFamily: fonts.serif, fontSize: 22, lineHeight: 27 },
+  entry: { fontFamily: fonts.serif, fontSize: 19, lineHeight: 23 },
+  body: { fontFamily: fonts.sans, fontSize: 15, lineHeight: 22, ...tab },
+  bodyStrong: { fontFamily: fonts.sansBold, fontSize: 15, lineHeight: 22, ...tab },
+  small: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, ...tab },
+  smallStrong: { fontFamily: fonts.sansBold, fontSize: 13, lineHeight: 18, ...tab },
+  label: { fontFamily: fonts.sansMedium, fontSize: 12, lineHeight: 16, ...tab },
+  price: { fontFamily: fonts.sansBold, fontSize: 17, lineHeight: 21, ...tab },
+  priceLarge: { fontFamily: fonts.sansBold, fontSize: 26, lineHeight: 30, letterSpacing: -0.3, ...tab },
 } as const;
 
 export type TypeVariant = keyof typeof type;

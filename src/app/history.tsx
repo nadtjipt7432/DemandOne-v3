@@ -1,67 +1,48 @@
 import { useRouter } from 'expo-router';
-import { Pressable, View } from 'react-native';
-import { Divider, Row, Screen, Txt } from '@/components/base';
-import { Avatar, Header } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { View } from 'react-native';
+import { formatMoney } from '@/domain/money';
+import { UNIT_SHORT } from '@/domain/terms';
+import { useAppState, useViewer } from '@/state/hooks';
+import { Page, Row, Section, T, Tap, TopBar } from '@/ui/core';
+import { SideMark } from '@/ui/market';
 import { colors, space } from '@/theme';
 
-/** Every completed transaction, buyer and seller side — the "past transactions" list. */
+/** Verified transaction history — completed on both sides of the market. */
 export default function History() {
   const router = useRouter();
-  const { bookings, people } = useAppState();
-  const past = bookings.filter((b) => b.status === 'complete');
-
+  const s = useAppState();
+  const viewer = useViewer();
+  const done = s.bookings.filter((b) => b.status === 'complete' && (b.buyerId === viewer.id || b.sellerId === viewer.id));
   return (
-    <Screen scroll>
-      <Header onBack={() => router.back()} title="Transaction history" />
-      <Txt variant="small" color={colors.textFaint} style={{ marginTop: space.xs }}>
-        {past.length} completed, both sides of the exchange.
-      </Txt>
-
-      <View style={{ marginTop: space.lg }}>
-        {past.length === 0 ? (
-          <Txt variant="small" color={colors.textFaint} style={{ paddingVertical: space.md }}>
-            Nothing completed yet — it'll show up here once work is verified done.
-          </Txt>
-        ) : (
-          past.map((b, i) => {
-            const person = people[b.personId];
-            return (
-              <View key={b.id}>
-                {i > 0 ? <Divider /> : null}
-                <Pressable
-                  onPress={() => router.push({ pathname: '/confirmation/[id]', params: { id: b.id } })}
-                  style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
-                  <Row style={{ justifyContent: 'space-between' }}>
-                    <Row gap={space.md} style={{ flex: 1 }}>
-                      <Avatar initials={person?.initials ?? '··'} />
-                      <View style={{ flex: 1 }}>
-                        <Txt variant="bodyStrong" numberOfLines={1}>
-                          {b.service}
-                        </Txt>
-                        <Txt variant="small" color={colors.textFaint} numberOfLines={1}>
-                          {person?.name} · {b.when}
-                        </Txt>
-                      </View>
-                    </Row>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Txt variant="heading">${b.price}</Txt>
-                      <Txt variant="small" color={colors.textFaint}>
-                        {b.role === 'buyer' ? 'Paid' : 'Earned'}
-                      </Txt>
-                    </View>
+    <Page>
+      <TopBar onBack={() => router.back()} />
+      <T v="display">History</T>
+      <T v="body" color={colors.inkDim} style={{ marginTop: space.sm }}>{`${done.length} verified transaction${done.length === 1 ? '' : 's'}, confirmed by both sides.`}</T>
+      <Section title="Completed" ruled>
+        {done.length === 0 ? <T v="body" color={colors.inkDim} style={{ paddingVertical: space.md }}>Nothing completed yet.</T> : null}
+        {done.map((b) => {
+          const buyer = b.buyerId === viewer.id;
+          const other = s.people[buyer ? b.sellerId : b.buyerId];
+          return (
+            <Tap key={b.id} label={b.title} onPress={() => router.push({ pathname: '/handled/[id]', params: { id: b.id } })}>
+              <View style={{ paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.rule, gap: 4 }}>
+                <Row justify="space-between">
+                  <Row gap={6}>
+                    <SideMark kind={buyer ? 'need' : 'offer'} />
+                    <T v="label" color={colors.inkDim}>{`${buyer ? 'Bought from' : 'Sold to'} ${other?.name}`}</T>
                   </Row>
-                  {b.savedAmount ? (
-                    <Txt variant="small" color={colors.accent} style={{ marginTop: 4 }}>
-                      ${b.savedAmount} {b.role === 'buyer' ? 'saved' : 'above typical rate'}
-                    </Txt>
-                  ) : null}
-                </Pressable>
+                  <T v="label" color={colors.inkFaint}>{b.completedAt ? new Date(b.completedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</T>
+                </Row>
+                <Row justify="space-between" gap={space.md}>
+                  <T v="entry" style={{ flex: 1 }} lines={1}>{b.title}</T>
+                  <T v="price">{`${formatMoney(buyer ? b.fees.buyerTotal : b.fees.sellerNet)}${UNIT_SHORT[b.unit]}`}</T>
+                </Row>
+                <T v="small" color={colors.inkFaint}>{buyer ? 'Paid, including fee' : 'Received, after fee'}</T>
               </View>
-            );
-          })
-        )}
-      </View>
-    </Screen>
+            </Tap>
+          );
+        })}
+      </Section>
+    </Page>
   );
 }

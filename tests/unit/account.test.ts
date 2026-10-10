@@ -14,7 +14,7 @@ import {
   signOut,
   skipCapability,
 } from '@/services/account';
-import { createFromText } from '@/services/market';
+import { createPosition } from '@/services/market';
 import { flushWrites, getState, hydrateStore } from '@/state/store';
 
 setLatencyScale(0);
@@ -49,7 +49,7 @@ describe('signup', () => {
     expect(s.signedIn).toBe(true);
     expect(s.account).toMatchObject({ email: 'ada@example.com', onboarding: 'capability' });
     expect(viewer()).toMatchObject({ name: 'Ada Lovelace', initials: 'AL', location: 'London, United Kingdom', needs: [], offers: [] });
-    expect(s.matches).toEqual({});
+    expect(s.negotiations).toEqual({});
     expect(s.bookings).toEqual([]);
     expect(s.paymentMethods).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe('persistence', () => {
     await setCapabilityProfile({ summary: 'Spreadsheets', categories: ['finance'], workTypes: ['analyze'] });
     await setStandardOfValue(['trust', 'budget', 'expertise', 'geography']);
     await setLocation('Tampa, FL');
-    const needId = await createFromText({ mode: 'need', text: 'Tax return review', category: 'tax', budgetMax: 200 });
+    const needId = await createPosition({ mode: 'need', title: 'Tax return review', category: 'tax', price: 200 });
 
     await reload();
 

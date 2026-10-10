@@ -1,4 +1,5 @@
-import { Fraunces_500Medium_Italic, Fraunces_600SemiBold, useFonts } from '@expo-google-fonts/fraunces';
+import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-google-fonts/geist';
+import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic, useFonts } from '@expo-google-fonts/instrument-serif';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -14,7 +15,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 void bootstrap(asyncStorage);
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Fraunces_600SemiBold, Fraunces_500Medium_Italic });
+  const [fontsLoaded] = useFonts({ InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic, Geist_400Regular, Geist_500Medium, Geist_600SemiBold });
   const hydrated = useHydrated();
 
   useEffect(() => {
@@ -48,9 +49,9 @@ function Navigator() {
           contentStyle: { backgroundColor: colors.bg },
           animation: 'slide_from_right',
         }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" options={{ animation: 'fade' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="handled/[id]" options={{ animation: 'fade' }} />
       </Stack>
     </>
   );

@@ -1,109 +1,96 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { Divider, Row, Screen, Segmented, Txt } from '@/components/base';
-import { Avatar, BookingBadge, MatchBadge } from '@/components/domain';
-import { useAppState } from '@/state/hooks';
+import { View } from 'react-native';
+import { formatMoney } from '@/domain/money';
+import { isTerminal, latestBy, otherSide, sideOf } from '@/domain/negotiation';
+import { UNIT_SHORT } from '@/domain/terms';
+import { useAppState, useViewer } from '@/state/hooks';
+import { Page, Row, Section, T, Tap } from '@/ui/core';
+import { SideMark } from '@/ui/market';
 import { colors, space } from '@/theme';
+import type { Booking, Negotiation } from '@/domain/types';
 
-type Seg = 'new' | 'negotiating' | 'booked';
+const BOOKING_STATE: Record<Booking['status'], string> = {
+  agreed: 'Agreed, payment to authorize',
+  paid: 'Payment held, work in progress',
+  delivered: 'Delivered, awaiting confirmation',
+  complete: 'Cleared',
+};
 
-export default function Matches() {
+const NEG_STATE: Record<Negotiation['status'], string> = {
+  evaluating: 'Evaluating',
+  awaiting_response: 'Waiting on them',
+  countered: 'Your turn',
+  accepted: 'Agreed',
+  rejected: 'Declined',
+  expired: 'Expired',
+  withdrawn: 'Stopped',
+  cleared: 'Cleared',
+};
+
+/** Deals — every negotiation and transaction, grouped by whose move it is. */
+export default function Deals() {
   const router = useRouter();
-  const { matches, people, bookings, cards } = useAppState();
-  const [seg, setSeg] = useState<Seg>('new');
+  const s = useAppState();
+  const viewer = useViewer();
+  const mine = Object.values(s.negotiations).filter((n) => n.buyerId === viewer.id || n.sellerId === viewer.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const bookings = s.bookings.filter((b) => b.buyerId === viewer.id || b.sellerId === viewer.id);
 
-  const allMatches = Object.values(matches);
-  const newOnes = allMatches.filter((m) => m.status === 'pending' || m.status === 'mutual');
-  const negotiating = allMatches.filter((m) => m.status === 'negotiating');
+  const yourTurn = mine.filter((n) => n.status === 'countered');
+  const waiting = mine.filter((n) => n.status === 'awaiting_response' || n.status === 'evaluating');
+  const inProgress = bookings.filter((b) => b.status !== 'complete');
+  const closed = [...bookings.filter((b) => b.status === 'complete').map((b) => ({ kind: 'b' as const, b, at: b.completedAt ?? b.createdAt })), ...mine.filter((n) => isTerminal(n) && !n.bookingId).map((n) => ({ kind: 'n' as const, n, at: n.updatedAt }))].sort((a, b) => b.at.localeCompare(a.at));
 
-  const items: { key: Seg; label: string; count: number }[] = [
-    { key: 'new', label: 'New', count: newOnes.length },
-    { key: 'negotiating', label: 'Talking', count: negotiating.length },
-    { key: 'booked', label: 'Booked', count: bookings.length },
-  ];
+  const negRow = (n: Negotiation) => {
+    const side = sideOf(n, viewer.id);
+    const theirs = latestBy(n, otherSide(side));
+    const who = s.people[side === 'buyer' ? n.sellerId : n.buyerId]?.name;
+    return (
+      <Tap key={n.id} label={`${n.listing.title}, ${NEG_STATE[n.status]}`} onPress={() => router.push({ pathname: '/negotiation/[id]', params: { id: n.id } })}>
+        <View style={{ paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.rule, gap: 4 }}>
+          <Row justify="space-between">
+            <Row gap={6}><SideMark kind={side === 'buyer' ? 'need' : 'offer'} /><T v="label" color={colors.inkDim}>{`${side === 'buyer' ? 'Buying from' : 'Selling to'} ${who}`}</T></Row>
+            <T v="label" color={n.status === 'countered' ? colors.amberText : colors.inkFaint}>{NEG_STATE[n.status]}</T>
+          </Row>
+          <Row justify="space-between" align="flex-start" gap={space.md}>
+            <T v="entry" lines={2} style={{ flex: 1 }}>{n.listing.title}</T>
+            {theirs ? <T v="price">{`${formatMoney(theirs.terms.price)}${UNIT_SHORT[n.listing.unit]}`}</T> : null}
+          </Row>
+        </View>
+      </Tap>
+    );
+  };
 
-  const shown = seg === 'new' ? newOnes : seg === 'negotiating' ? negotiating : [];
+  const bookingRow = (b: Booking) => {
+    const buyer = b.buyerId === viewer.id;
+    const who = s.people[buyer ? b.sellerId : b.buyerId]?.name;
+    return (
+      <Tap key={b.id} label={`${b.title}, ${BOOKING_STATE[b.status]}`} onPress={() => router.push({ pathname: '/handled/[id]', params: { id: b.id } })}>
+        <View style={{ paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.rule, gap: 4 }}>
+          <Row justify="space-between">
+            <Row gap={6}><SideMark kind={buyer ? 'need' : 'offer'} /><T v="label" color={colors.inkDim}>{`${buyer ? 'Bought from' : 'Sold to'} ${who}`}</T></Row>
+            <T v="label" color={b.status === 'complete' ? colors.inkFaint : colors.forest}>{BOOKING_STATE[b.status]}</T>
+          </Row>
+          <Row justify="space-between" align="flex-start" gap={space.md}>
+            <T v="entry" lines={2} style={{ flex: 1 }}>{b.title}</T>
+            <T v="price">{`${formatMoney(b.terms.price)}${UNIT_SHORT[b.unit]}`}</T>
+          </Row>
+        </View>
+      </Tap>
+    );
+  };
+
+  const empty = mine.length === 0 && bookings.length === 0;
 
   return (
-    <Screen scroll>
-      <Txt variant="title" style={{ marginTop: space.sm }}>
-        Requests
-      </Txt>
-
-      <View style={{ marginTop: space.lg }}>
-        <Segmented items={items} value={seg} onChange={(k) => setSeg(k as Seg)} />
-      </View>
-
-      <View style={{ marginTop: space.lg }}>
-        {seg !== 'booked' &&
-          (shown.length === 0 ? (
-            <Txt variant="small" color={colors.textFaint} style={{ paddingVertical: space.md }}>
-              {seg === 'new' ? 'Nothing new yet. Mark something interested in the Exchange.' : 'Nothing being negotiated right now.'}
-            </Txt>
-          ) : (
-            shown.map((m, i) => {
-              const person = people[m.personId];
-              const card = cards.find((c) => c.id === m.cardId);
-              return (
-                <View key={m.id}>
-                  {i > 0 ? <Divider /> : null}
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/match/[id]', params: { id: m.id } })}
-                    style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
-                    <Row style={{ justifyContent: 'space-between' }}>
-                      <Row gap={space.md} style={{ flex: 1 }}>
-                        <Avatar initials={person?.initials ?? '··'} />
-                        <View style={{ flex: 1 }}>
-                          <Txt variant="bodyStrong" numberOfLines={1}>
-                            {card?.title ?? person?.name}
-                          </Txt>
-                          <MatchBadge status={m.status} />
-                        </View>
-                      </Row>
-                      <Txt variant="heading">${m.currentPrice}</Txt>
-                    </Row>
-                  </Pressable>
-                </View>
-              );
-            })
-          ))}
-
-        {seg === 'booked' &&
-          (bookings.length === 0 ? (
-            <Txt variant="small" color={colors.textFaint} style={{ paddingVertical: space.md }}>
-              No bookings yet. Approve a recommendation and it lands here.
-            </Txt>
-          ) : (
-            bookings.map((b, i) => {
-              const person = people[b.personId];
-              return (
-                <View key={b.id}>
-                  {i > 0 ? <Divider /> : null}
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/confirmation/[id]', params: { id: b.id } })}
-                    style={({ pressed }) => [{ paddingVertical: space.md }, pressed && { opacity: 0.6 }]}>
-                    <Row style={{ justifyContent: 'space-between' }}>
-                      <BookingBadge status={b.status} />
-                      <Txt variant="heading">${b.price}</Txt>
-                    </Row>
-                    <Txt variant="bodyStrong" style={{ marginTop: space.sm }}>
-                      {b.service}
-                    </Txt>
-                    <Txt variant="small" color={colors.textDim} style={{ marginTop: 4 }}>
-                      {person?.name} · {b.when} · {b.distanceMi} mi
-                    </Txt>
-                    {b.savedAmount ? (
-                      <Txt variant="small" color={colors.accent} style={{ marginTop: 4 }}>
-                        ${b.savedAmount} saved
-                      </Txt>
-                    ) : null}
-                  </Pressable>
-                </View>
-              );
-            })
-          ))}
-      </View>
-    </Screen>
+    <Page>
+      <T v="display" style={{ marginTop: space.lg }}>Deals</T>
+      {empty ? (
+        <T v="body" color={colors.inkDim} style={{ marginTop: space.md }}>Nothing yet. Bid on a position in the Exchange, or tell your agent what you need.</T>
+      ) : null}
+      {yourTurn.length ? <Section title="Your turn" ruled>{yourTurn.map(negRow)}</Section> : null}
+      {inProgress.length ? <Section title="In progress" ruled>{inProgress.map(bookingRow)}</Section> : null}
+      {waiting.length ? <Section title="Waiting on them" ruled>{waiting.map(negRow)}</Section> : null}
+      {closed.length ? <Section title="Closed" ruled>{closed.map((c) => (c.kind === 'b' ? bookingRow(c.b) : negRow(c.n)))}</Section> : null}
+    </Page>
   );
 }

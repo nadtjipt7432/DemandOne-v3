@@ -1,96 +1,55 @@
-import Feather from '@expo/vector-icons/Feather';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
-import { Btn, Divider, InfoRow, Screen, Txt } from '@/components/base';
-import { CapabilityEditor } from '@/components/CapabilityEditor';
-import { Header } from '@/components/domain';
-import { LocationPicker } from '@/components/LocationPicker';
+import type { ProfileErrors } from '@/domain/identity';
+import { updateProfile } from '@/services/account';
 import { useAppState, useViewer } from '@/state/hooks';
-import { setCapabilityProfile, setLocation, signOut } from '@/services/account';
+import { CapabilityForm } from '@/ui/CapabilityForm';
+import { Button, Field, KeyValue, Page, Rule, Section, Stack, T, TopBar } from '@/ui/core';
 import { colors, space } from '@/theme';
-import type { CapabilityProfile } from '@/domain/types';
 
-export default function Account() {
+/** Edit profile — the same single record shown on Profile. Validated, with save feedback. */
+export default function EditProfile() {
   const router = useRouter();
   const { account } = useAppState();
   const viewer = useViewer();
-  const [editingLocation, setEditingLocation] = useState(false);
-  const [editingCapability, setEditingCapability] = useState(false);
+  const [name, setName] = useState(viewer.name);
+  const [location, setLocation] = useState(viewer.location);
+  const [errors, setErrors] = useState<ProfileErrors>({});
+  const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const saveLocation = async (loc: string) => {
+  const save = async () => {
     setBusy(true);
-    await setLocation(loc);
+    setSaved(null);
+    const res = await updateProfile({ name, location });
     setBusy(false);
-    setEditingLocation(false);
-  };
-
-  const saveCapability = async (profile: CapabilityProfile) => {
-    await setCapabilityProfile(profile);
-    setEditingCapability(false);
+    if (!res.ok) return setErrors(res.errors);
+    setErrors({});
+    setSaved('Saved.');
   };
 
   return (
-    <Screen scroll>
-      <Header onBack={() => router.back()} title="Account & login" />
+    <Page>
+      <TopBar onBack={() => router.back()} />
+      <T v="display">Edit profile</T>
 
-      <View style={{ marginTop: space.lg }}>
-        <InfoRow icon="user" label={viewer.name} value="Name" />
-        <Divider />
-        <InfoRow icon="mail" label={account?.email ?? ''} value="Email" />
-        <Divider />
-        {editingLocation ? (
-          <View style={{ paddingVertical: space.md, gap: space.sm }}>
-            <Txt variant="small" color={colors.textFaint}>
-              Location
-            </Txt>
-            {busy ? (
-              <Txt variant="small" color={colors.textFaint}>
-                Saving…
-              </Txt>
-            ) : (
-              <LocationPicker onChange={saveLocation} />
-            )}
-            <Btn title="Cancel" variant="ghost" onPress={() => setEditingLocation(false)} />
-          </View>
-        ) : (
-          <InfoRow
-            icon="map-pin"
-            label={viewer.location || 'Not set'}
-            value="Location"
-            right={<Feather name="chevron-right" size={16} color={colors.textFaint} />}
-            onPress={() => setEditingLocation(true)}
-          />
-        )}
-        <Divider />
-        {editingCapability ? (
-          <View style={{ paddingVertical: space.md, gap: space.sm }}>
-            <Txt variant="small" color={colors.textFaint}>
-              Capability
-            </Txt>
-            <CapabilityEditor initial={viewer.capability} onSave={saveCapability} />
-            <Btn title="Cancel" variant="ghost" onPress={() => setEditingCapability(false)} />
-          </View>
-        ) : (
-          <InfoRow
-            icon="compass"
-            label={viewer.capability?.summary || 'Not set'}
-            value="Capability"
-            right={<Feather name="chevron-right" size={16} color={colors.textFaint} />}
-            onPress={() => setEditingCapability(true)}
-          />
-        )}
-      </View>
+      <Section title="Identity" ruled>
+        <Stack gap={space.lg} style={{ marginTop: space.md }}>
+          <Field label="Name" value={name} onChangeText={(t) => { setName(t); setSaved(null); }} autoCapitalize="words" error={errors.name} />
+          <Field label="Location" value={location} onChangeText={(t) => { setLocation(t); setSaved(null); }} placeholder="Not set" autoCapitalize="words" error={errors.location} hint="Leave blank to keep it private." />
+          <Button title="Save" onPress={save} loading={busy} />
+          {saved ? <T v="small" color={colors.forest} testID="profile-saved">{saved}</T> : null}
+        </Stack>
+        <Rule style={{ marginTop: space.lg }} />
+        <KeyValue label="Email" value={account?.email ?? ''} />
+        <T v="small" color={colors.inkFaint}>Your email identifies your account and can’t be changed here.</T>
+      </Section>
 
-      <Txt variant="small" color={colors.textFaint} style={{ marginTop: space.xl }}>
-        Your data is not inventory. Never sold, never used for advertising.
-      </Txt>
-
-      <Btn title="Sign out" variant="ghost" style={{ marginTop: space.xl }} onPress={signOut} />
-      <Txt variant="small" color={colors.textFaint} style={{ textAlign: 'center' }}>
-        Your account stays on this device — sign back in with {account?.email}.
-      </Txt>
-    </Screen>
+      <Section title="Capabilities, background and links" ruled>
+        <Stack style={{ marginTop: space.md }}>
+          <CapabilityForm viewer={viewer} submitLabel="Save" onDone={() => setSaved('Saved.')} />
+        </Stack>
+      </Section>
+    </Page>
   );
 }

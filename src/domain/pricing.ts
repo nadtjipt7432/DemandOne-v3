@@ -1,14 +1,16 @@
+import type { Fees } from './types';
+
 /**
- * The take rate, per the PRD/memo: launched at the bottom of the market on purpose —
- * 5% from the buyer, 10% from the provider, charged on the final negotiated price,
- * always all-in and visible before anyone approves. No lead fees, no subscription.
- *
- * The price shown anywhere in this app (a card's price, a match's current price) IS
- * the all-in total — there's no separate surcharge added at checkout. This module
- * only exists to disclose that plainly near the moment of approval, never to change
- * a displayed number.
+ * DemandOne's take: 5% from the buyer on top of the agreed price, 10% from the
+ * seller out of it. Shown in full before anyone approves; nothing else is added.
  */
 export const BUYER_FEE_RATE = 0.05;
-export const PROVIDER_FEE_RATE = 0.1;
+export const SELLER_FEE_RATE = 0.1;
 
-export const FEE_DISCLOSURE = "This price is all-in — DemandOne's fee is already included, nothing added at checkout.";
+export function computeFees(agreedPrice: number): Fees {
+  const buyerFee = Math.round(agreedPrice * BUYER_FEE_RATE);
+  const sellerFee = Math.round(agreedPrice * SELLER_FEE_RATE);
+  return { buyerFee, buyerTotal: agreedPrice + buyerFee, sellerFee, sellerNet: agreedPrice - sellerFee };
+}
+
+export const FEE_DISCLOSURE = 'Buyers pay a 5% DemandOne fee on top of the agreed price; sellers pay 10% from it. Shown before you approve.';

@@ -11,7 +11,8 @@
  * `liquiditySignal`, or any of the intermediate math — only `Fit`.
  */
 
-import type { Booking, Category, Criterion, Fit, FitBreakdown, MarketValue, MatchCard, Person, TimeWindow } from './types';
+import { formatMoney } from './money';
+import type { Booking, Criterion, Fit, FitBreakdown, MarketValue, MatchCard, Person, TimeWindow } from './types';
 
 /** Rank position → weight. Position 0 (most important) gets the biggest share. */
 const RANK_WEIGHTS = [0.4, 0.28, 0.2, 0.12] as const;
@@ -129,8 +130,15 @@ export function timeBucket(window: TimeWindow): TimeBucket {
  * screen can surface it before the user commits (flagged, never silently blocked —
  * "the user approves every commitment" applies here too).
  */
-export function findScheduleConflict(window: TimeWindow, bookings: Booking[]): Booking | undefined {
-  return bookings.find((b) => b.status !== 'complete' && b.window && windowsFit(window, b.window));
+export function findScheduleConflict(window: TimeWindow, bookings: Booking[], viewerId: string): Booking | undefined {
+  return bookings.find(
+    (b) => b.status !== 'complete' && (b.buyerId === viewerId || b.sellerId === viewerId) && b.window && windowsFit(window, b.window)
+  );
+}
+
+/** Does this listing sit in a category the viewer's capability profile covers? Informs ranking only. */
+export function matchesCapability(card: MatchCard, viewer: Person): boolean {
+  return card.kind === 'need' && !!viewer.capability?.categories.includes(card.category);
 }
 
 /**
@@ -162,15 +170,15 @@ export function computeFit(
     budgetScore = card.price <= target ? 1 : clamp(1 - (card.price - target) / target);
     budgetLine =
       card.price <= target
-        ? `$${card.price} is within the $${target} you're comfortable with for this.`
-        : `$${card.price} runs above the $${target} comfort range you set for this.`;
+        ? `${formatMoney(card.price)} is within the ${formatMoney(target)} you set for this.`
+        : `${formatMoney(card.price)} is above the ${formatMoney(target)} you set for this.`;
   } else {
     const yourRate = (context && 'price' in context ? context.price : undefined) ?? card.price * 0.8;
     budgetScore = card.price >= yourRate ? 1 : clamp(card.price / yourRate);
     budgetLine =
       card.price >= yourRate
-        ? `$${card.price} is at or above your usual $${yourRate} rate for this.`
-        : `$${card.price} is a bit under your usual $${yourRate} rate for this.`;
+        ? `${formatMoney(card.price)} is at or above your ${formatMoney(yourRate)} rate for this.`
+        : `${formatMoney(card.price)} is under your ${formatMoney(yourRate)} rate for this.`;
   }
 
   const geographyScore = clamp(1 - card.distanceMi / relevantRadius);
@@ -215,25 +223,25 @@ export function computeFit(
 }
 
 /**
- * Objective price benchmark — independent of the viewer entirely. For an offer, a
- * lower price than the category average is good value for a buyer; for a need, a
- * higher budget than average is good value for a provider deciding whether to take
- * the job. Only flagged "good" above a real threshold, so the badge stays rare.
+ * Price against comparable open listings — the same category, side and unit, in
+ * this exchange. With fewer than three comparables there's no credible benchmark,
+ * so no claim is made at all.
  */
 const GOOD_VALUE_THRESHOLD = 10;
+const MIN_COMPARABLES = 3;
 
-export function computeMarketValue(card: MatchCard, category: Category | undefined): MarketValue {
-  const avg = category?.marketAvgPrice ?? card.price;
-  // Literal: how the price actually sits relative to the benchmark, regardless of kind.
-  const vsAvgPct = Math.round(((card.price - avg) / avg) * 100);
-  const literalDirection = vsAvgPct >= 0 ? 'above' : 'below';
-  const label = `${Math.abs(vsAvgPct)}% ${literalDirection} typical rate`;
-
-  // Goodness: a cheap offer is good for a buyer; a generous need budget is good for a provider.
-  const deltaPct = card.kind === 'offer' ? -vsAvgPct : vsAvgPct;
-  const isGoodValue = deltaPct >= GOOD_VALUE_THRESHOLD;
-
-  return { deltaPct, isGoodValue, label };
+export function computeMarketValue(card: MatchCard, cards: MatchCard[]): MarketValue {
+  const comparables = cards.filter((c) => c.id !== card.id && c.category === card.category && c.kind === card.kind && c.unit === card.unit);
+  if (comparables.length < MIN_COMPARABLES) return { deltaPct: 0, isGoodValue: false, label: '' };
+  const prices = comparables.map((c) => c.price).sort((a, b) => a - b);
+  const median = prices[Math.floor(prices.length / 2)];
+  const vsMedian = Math.round(((card.price - median) / median) * 100);
+  const deltaPct = card.kind === 'offer' ? -vsMedian : vsMedian;
+  return {
+    deltaPct,
+    isGoodValue: deltaPct >= GOOD_VALUE_THRESHOLD,
+    label: `${Math.abs(vsMedian)}% ${vsMedian >= 0 ? 'above' : 'below'} the median of ${comparables.length} comparable listings`,
+  };
 }
 
 export { CRITERION_LABEL };
