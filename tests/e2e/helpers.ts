@@ -2,11 +2,10 @@ import { expect, type Page } from '@playwright/test';
 
 export const button = (page: Page, name: string | RegExp) => page.getByRole('button', { name, exact: typeof name === 'string' });
 
-/** Landing page → past the intro animation → login. */
+/** Landing page → the intro animation carries straight into login when it finishes. */
 export async function openLogin(page: Page) {
   await page.goto('/');
-  await button(page, 'Enter DemandOne').click({ timeout: 30_000 });
-  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible({ timeout: 30_000 });
 }
 
 export async function enterCode(page: Page) {

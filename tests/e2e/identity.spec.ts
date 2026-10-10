@@ -51,7 +51,7 @@ test('signing out keeps the account; signing back in skips onboarding', async ({
   await openTab(page, 'You');
   await page.getByText('Account & login').click();
   await button(page, 'Sign out').click();
-  await expect(button(page, 'Enter DemandOne')).toBeVisible();
+  await expect(page).toHaveURL(/localhost:8081\/(login)?$/);
 
   await page.goto('/today');
   await expect(page).not.toHaveURL(/\/today$/);
@@ -83,6 +83,6 @@ test('a different email on the same device must explicitly erase the old account
 
 test('signed-out visitors cannot reach app screens', async ({ page }) => {
   await page.goto('/you');
-  await expect(button(page, 'Enter DemandOne')).toBeVisible();
-  await expect(page).toHaveURL(/localhost:8081\/$/);
+  await expect(page).toHaveURL(/localhost:8081\/(login)?$/);
+  await expect(page.getByText('Ada Lovelace')).toHaveCount(0);
 });
