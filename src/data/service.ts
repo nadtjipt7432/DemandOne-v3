@@ -4,6 +4,7 @@ import type {
   Booking,
   BuyerAuthority,
   Capacity,
+  CapabilityProfile,
   Criterion,
   Effort,
   HouseholdMember,
@@ -529,6 +530,24 @@ export async function setLocation(location: string): Promise<void> {
   setState((s) => ({
     ...s,
     people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], location } },
+  }));
+}
+
+/** What login actually captures becomes the real identity — not thrown away after Verify. */
+export async function setIdentity(name: string, email: string): Promise<void> {
+  await delay(150);
+  setState((s) => ({
+    ...s,
+    people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], name, email } },
+  }));
+}
+
+/** Set at capability onboarding, or edited later from Account — see CapabilityProfile's doc comment. */
+export async function setCapabilityProfile(profile: CapabilityProfile): Promise<void> {
+  await delay(250);
+  setState((s) => ({
+    ...s,
+    people: { ...s.people, [s.viewerId]: { ...s.people[s.viewerId], capability: profile } },
   }));
 }
 

@@ -204,6 +204,31 @@ export function getAgentActivity(viewer: Person, matches: Record<string, Match>,
   return lines;
 }
 
+/* ------------------------------------------- 6. Opportunities for what you offer */
+
+export interface CapabilityOpportunity {
+  categoryId: string;
+  categoryLabel: string;
+  needCount: number;
+}
+
+/**
+ * Not a match or a listing — just "demand exists where your capability profile
+ * says you're relevant," derived fresh from the same `cards` Discover already
+ * uses. Tapping one hands off to intent-results (see today.tsx) pre-filled with
+ * the profile's own summary — the only place a real Offer is ever created; this
+ * never auto-posts one itself.
+ */
+export function getCapabilityOpportunities(viewer: Person, cards: MatchCard[], categories: AppState['categories']): CapabilityOpportunity[] {
+  const categoryById = Object.fromEntries(categories.map((c) => [c.id, c]));
+  const results: CapabilityOpportunity[] = [];
+  for (const categoryId of viewer.capability?.categories ?? []) {
+    const needCount = cards.filter((c) => c.category === categoryId && c.kind === 'need').length;
+    if (needCount > 0) results.push({ categoryId, categoryLabel: categoryById[categoryId]?.label ?? categoryId, needCount });
+  }
+  return results;
+}
+
 /* ------------------------------------------------- 7. Trust/network relevance */
 
 export function getNetworkRelevance(matches: Record<string, Match>, people: Record<string, Person>): string | undefined {

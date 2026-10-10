@@ -10,7 +10,9 @@
  * `computeFit` / `computeMarketValue` / `passesHardConstraints` in matching.ts.
  */
 
-import type { Criterion } from './types';
+import type { Criterion, WorkCategory } from './types';
+
+export type { WorkCategory };
 
 export interface ImpliedCategory {
   categoryId: string;
@@ -212,9 +214,8 @@ export function extractQuickFacts(text: string): QuickFacts {
  * deterministic mock as the rest of this module: a category-level default, unioned
  * with any more specific keyword hits in the title/description — never manually
  * tagged, and computed on demand (not persisted) so it can't drift from the text.
+ * (`WorkCategory` itself lives in types.ts — re-exported above.)
  */
-export type WorkCategory = 'advise' | 'analyze' | 'build' | 'operate' | 'connect' | 'create';
-
 export const WORK_LABEL: Record<WorkCategory, string> = {
   advise: 'Advise',
   analyze: 'Analyze',
@@ -251,4 +252,22 @@ export function inferWorkCategories(text: string, categoryId: string): WorkCateg
     if (keywords.some((k) => lower.includes(k))) work.forEach((w) => set.add(w));
   }
   return Array.from(set);
+}
+
+export interface CapabilityInterpretation {
+  categories: string[];
+  workTypes: WorkCategory[];
+}
+
+/**
+ * Capability onboarding's interpreter — not a third engine, just `interpretIntent`
+ * (for which categories this capability is relevant to) combined with
+ * `inferWorkCategories` (for the broad Advise/Analyze/... tags), the same way
+ * intent-results.tsx already composes the two for a Need/Offer.
+ */
+export function interpretCapability(text: string): CapabilityInterpretation {
+  const { impliedCategories } = interpretIntent(text);
+  const categories = impliedCategories.map((c) => c.categoryId);
+  const workTypes = Array.from(new Set(categories.flatMap((c) => inferWorkCategories(text, c))));
+  return { categories, workTypes: workTypes.length > 0 ? workTypes : inferWorkCategories(text, categories[0] ?? '') };
 }

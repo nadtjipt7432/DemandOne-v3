@@ -131,9 +131,9 @@ export const fontDisplay = 'Fraunces_600SemiBold';
 export const fontDisplayItalic = 'Fraunces_500Medium_Italic';
 
 export const type = {
-  display: { fontSize: 32, lineHeight: 38, fontWeight: '600' as const, letterSpacing: -0.4 },
-  title: { fontSize: 24, lineHeight: 30, fontWeight: '600' as const, letterSpacing: -0.2 },
-  heading: { fontSize: 18, lineHeight: 24, fontWeight: '600' as const },
+  display: { fontSize: 34, lineHeight: 40, fontWeight: '600' as const, letterSpacing: -0.4 },
+  title: { fontSize: 26, lineHeight: 32, fontWeight: '600' as const, letterSpacing: -0.2 },
+  heading: { fontSize: 20, lineHeight: 26, fontWeight: '600' as const },
   body: { fontSize: 16, lineHeight: 23, fontWeight: '400' as const },
   bodyStrong: { fontSize: 16, lineHeight: 23, fontWeight: '600' as const },
   small: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },

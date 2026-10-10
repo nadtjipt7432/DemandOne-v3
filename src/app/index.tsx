@@ -68,9 +68,10 @@ export default function Welcome() {
         </View>
       </Screen>
 
-      {/* The real page is already mounted above — this just fades away over it,
-          so there's no pop-in once the intro finishes. Tap anywhere to skip. */}
-      {showIntro ? <IntroAnimation onDone={() => setShowIntro(false)} /> : null}
+      {/* The real page is already mounted above, for the skip path — tap anywhere
+          to reveal it instead of waiting. Letting the animation finish on its own
+          carries straight into /login instead (see IntroAnimation). */}
+      {showIntro ? <IntroAnimation onSkip={() => setShowIntro(false)} /> : null}
     </View>
   );
 }

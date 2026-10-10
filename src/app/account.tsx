@@ -3,17 +3,20 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Btn, Divider, InfoRow, Screen, Txt } from '@/components/base';
+import { CapabilityEditor } from '@/components/CapabilityEditor';
 import { Header } from '@/components/domain';
 import { LocationPicker } from '@/components/LocationPicker';
 import { useAppState } from '@/data/hooks';
-import { setLocation } from '@/data/service';
+import { setCapabilityProfile, setLocation } from '@/data/service';
 import { colors, space } from '@/theme';
+import type { CapabilityProfile } from '@/data/types';
 
 export default function Account() {
   const router = useRouter();
   const { people, viewerId } = useAppState();
   const viewer = people[viewerId];
   const [editingLocation, setEditingLocation] = useState(false);
+  const [editingCapability, setEditingCapability] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const saveLocation = async (loc: string) => {
@@ -23,6 +26,11 @@ export default function Account() {
     setEditingLocation(false);
   };
 
+  const saveCapability = async (profile: CapabilityProfile) => {
+    await setCapabilityProfile(profile);
+    setEditingCapability(false);
+  };
+
   return (
     <Screen scroll>
       <Header onBack={() => router.back()} title="Account & login" />
@@ -30,7 +38,7 @@ export default function Account() {
       <View style={{ marginTop: space.lg }}>
         <InfoRow icon="user" label={viewer.name} value="Name" />
         <Divider />
-        <InfoRow icon="mail" label="nadia@light.inc" value="Email" />
+        <InfoRow icon="mail" label={viewer.email ?? 'Not set'} value="Email" />
         <Divider />
         {editingLocation ? (
           <View style={{ paddingVertical: space.md, gap: space.sm }}>
@@ -53,6 +61,24 @@ export default function Account() {
             value="Location"
             right={<Feather name="chevron-right" size={16} color={colors.textFaint} />}
             onPress={() => setEditingLocation(true)}
+          />
+        )}
+        <Divider />
+        {editingCapability ? (
+          <View style={{ paddingVertical: space.md, gap: space.sm }}>
+            <Txt variant="small" color={colors.textFaint}>
+              Capability
+            </Txt>
+            <CapabilityEditor initial={viewer.capability} onSave={saveCapability} />
+            <Btn title="Cancel" variant="ghost" onPress={() => setEditingCapability(false)} />
+          </View>
+        ) : (
+          <InfoRow
+            icon="compass"
+            label={viewer.capability?.summary || 'Not set'}
+            value="Capability"
+            right={<Feather name="chevron-right" size={16} color={colors.textFaint} />}
+            onPress={() => setEditingCapability(true)}
           />
         )}
       </View>

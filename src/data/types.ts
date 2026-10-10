@@ -68,6 +68,31 @@ export type LocationMode = 'remote' | 'in-person' | 'hybrid';
 export type BuyerAuthority = 'none' | 'within-range' | 'best-deal';
 export type SellerAuthority = 'none' | 'within-bounds' | 'toward-target';
 
+/**
+ * The Exchange's Work filter dimension — six deliberately broad categories
+ * describing the TYPE of value exchanged (not a profession/industry). Defined
+ * here (not in intents.ts, which does the actual inference) so this file never
+ * has to import from intents.ts — intents.ts re-exports it for the one existing
+ * import site (discover.tsx).
+ */
+export type WorkCategory = 'advise' | 'analyze' | 'build' | 'operate' | 'connect' | 'create';
+
+/**
+ * What someone says they *could* offer — deliberately not an `Offer`. An `Offer`
+ * is live in the exchange with a price and terms; a capability profile is just a
+ * standing description DemandOne can match demand against and suggest from. The
+ * user decides, separately and explicitly, when (and whether) to turn a
+ * suggestion into a real posted Offer — see intent-results.tsx's existing
+ * createFromText flow, which this reuses rather than auto-posting anything.
+ */
+export interface CapabilityProfile {
+  summary: string; // the raw natural-language text — never fabricated beyond this
+  categories: string[]; // Category ids, inferred then user-editable
+  workTypes: WorkCategory[];
+  locationMode?: LocationMode;
+  availabilityNote?: string;
+}
+
 export interface Need {
   id: string;
   personId: string;
@@ -127,6 +152,8 @@ export interface Reference {
 export interface Person {
   id: string;
   name: string;
+  /** Only ever set/read for the viewer — NPCs never log in, so they never have one. */
+  email?: string;
   initials: string;
   location: string;
   tier: TrustTier;
@@ -147,6 +174,8 @@ export interface Person {
   offers: Offer[];
   categories: string[]; // Category ids this person engages with, ranked to the top of the Exchange
   standardOfValue: StandardOfValue;
+  /** Set once, at capability onboarding or later from Account — see CapabilityProfile's own doc comment for why this isn't an Offer. */
+  capability?: CapabilityProfile;
 }
 
 export type CardKind = 'need' | 'offer'; // what the CARD's person is posting

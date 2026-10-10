@@ -7,7 +7,15 @@ import { Divider, Row, Screen, Txt } from '@/components/base';
 import { Avatar, MarketMoment, StatusDot } from '@/components/domain';
 import { useAppState } from '@/data/hooks';
 import { computeFit, computeMarketValue, passesHardConstraints } from '@/data/matching';
-import { getAgentActivity, getDecisions, getMarketFavor, getNetworkRelevance, getPortfolio, getTimingOpportunities } from '@/data/myMarket';
+import {
+  getAgentActivity,
+  getCapabilityOpportunities,
+  getDecisions,
+  getMarketFavor,
+  getNetworkRelevance,
+  getPortfolio,
+  getTimingOpportunities,
+} from '@/data/myMarket';
 import { getCalendarNudge } from '@/data/suggestions';
 import { colors, marketField, radius, space } from '@/theme';
 
@@ -30,6 +38,7 @@ export default function Today() {
   const timingOpportunities = useMemo(() => getTimingOpportunities(viewer, cards), [viewer, cards]);
   const favors = useMemo(() => getMarketFavor(viewer, matches, cards, people, categories), [viewer, matches, cards, people, categories]);
   const activityLines = useMemo(() => getAgentActivity(viewer, matches, cards), [viewer, matches, cards]);
+  const capabilityOpportunities = useMemo(() => getCapabilityOpportunities(viewer, cards, categories), [viewer, cards, categories]);
   const networkLine = useMemo(() => getNetworkRelevance(matches, people), [matches, people]);
   const nudge = useMemo(() => getCalendarNudge(), []);
 
@@ -224,6 +233,29 @@ export default function Today() {
                     {line}
                   </Txt>
                 </Row>
+              ))}
+            </View>
+          </View>
+        )}
+
+      {/* 5b. Opportunities for what your capability profile says you offer */}
+      {capabilityOpportunities.length > 0 &&
+        section(
+          <View>
+            <Txt variant="heading">Opportunities for what you offer</Txt>
+            <View style={{ marginTop: space.sm, gap: space.sm }}>
+              {capabilityOpportunities.map((o) => (
+                <Pressable
+                  key={o.categoryId}
+                  onPress={() => router.push({ pathname: '/intent-results', params: { text: viewer.capability?.summary ?? '' } })}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}>
+                  <Row style={{ justifyContent: 'space-between' }}>
+                    <Txt variant="small" color={colors.textDim} style={{ flex: 1 }}>
+                      {o.needCount} {o.needCount === 1 ? 'person' : 'people'} need {o.categoryLabel.toLowerCase()} help — you mentioned this.
+                    </Txt>
+                    <Feather name="chevron-right" size={16} color={colors.textFaint} />
+                  </Row>
+                </Pressable>
               ))}
             </View>
           </View>

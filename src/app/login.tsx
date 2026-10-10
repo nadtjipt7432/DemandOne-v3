@@ -5,7 +5,7 @@ import { Btn, Field, Row, Screen, Txt } from '@/components/base';
 import { DotScatter, Logomark } from '@/components/domain';
 import { LocationPicker } from '@/components/LocationPicker';
 import { useAppState } from '@/data/hooks';
-import { setLocation } from '@/data/service';
+import { setIdentity, setLocation } from '@/data/service';
 import { colors, fontDisplay, radius, space } from '@/theme';
 
 /**
@@ -35,10 +35,12 @@ export default function Login() {
 
   const verify = async () => {
     setBusy(true);
+    await setIdentity(name.trim(), email.trim());
     if (location.trim()) await setLocation(location.trim());
     await new Promise((r) => setTimeout(r, 400));
     setBusy(false);
-    router.replace(onboarded ? '/today' : '/onboarding');
+    const hasCapability = !!people[viewerId].capability;
+    router.replace(hasCapability ? (onboarded ? '/today' : '/onboarding') : '/capability');
   };
 
   return (
