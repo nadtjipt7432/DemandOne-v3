@@ -4,7 +4,8 @@ import { computeFees } from '@/domain/pricing';
 import { deadlineLabel } from '@/domain/terms';
 import { getState, id, setState } from '@/state/store';
 import { viewerOf } from './viewer';
-import type { AppState, Booking, BookingStatus, Person } from '@/domain/types';
+import { applyReview, ReviewedRole, ReviewInput, ReviewIssue, simulatedReviewOf, toReview, validateReview } from '@/domain/feedback';
+import type { AppState, Booking, BookingStatus, Person, Review } from '@/domain/types';
 
 /**
  * The transaction lifecycle on one shared record:
@@ -138,49 +139,84 @@ function bump(p: Person, completed: number, recommended: number): Person {
   return { ...p, completedCount: p.completedCount + completed, recommendCount: p.recommendCount + recommended };
 }
 
+/** Record a received review on a person: their recommendation count and per-aspect record. */
+function receive(p: Person, review: Review, from: { name: string; role: ReviewedRole }): Person {
+  return { ...bump(p, 0, review.recommends ? 1 : 0), reputation: applyReview(p.reputation, review, from) };
+}
+
 /**
- * Completion: both parties gain a verified completed transaction, the negotiation
- * clears, and the simulated counterparty leaves its feedback on the viewer (demo).
+ * Completion: both parties gain a verified completed transaction and the
+ * negotiation clears. The simulated counterparty leaves its review of the viewer
+ * (demo); it stays sealed, and off the viewer's record, until the viewer leaves theirs.
  */
 function complete(s: AppState, bookingId: string): AppState {
   const b = s.bookings.find((x) => x.id === bookingId)!;
   const viewerId = viewerOf(s).id;
   const otherId = counterpartyOf(b, viewerId);
-  const viewer = s.people[viewerId];
-  const other = s.people[otherId];
-  const counterpartyRecommends = true;
-  const feedback = roleOf(b, viewerId) === 'buyer' ? { ...b.feedback, bySeller: counterpartyRecommends } : { ...b.feedback, byBuyer: counterpartyRecommends };
+  const viewerRole = roleOf(b, viewerId);
+  const at = nowIso();
+  const theirs = simulatedReviewOf(viewerRole, at);
+  const feedback = viewerRole === 'buyer' ? { ...b.feedback, bySeller: theirs } : { ...b.feedback, byBuyer: theirs };
   const n = s.negotiations[b.negotiationId];
+  const other = s.people[otherId];
   return {
-    ...updateBooking(s, bookingId, (x) => ({ ...x, status: 'complete', completedAt: nowIso(), feedback })),
+    ...updateBooking(s, bookingId, (x) => ({ ...x, status: 'complete', completedAt: at, feedback })),
     people: {
       ...s.people,
-      [viewerId]: bump(viewer, 1, counterpartyRecommends ? 1 : 0),
+      [viewerId]: bump(s.people[viewerId], 1, 0),
       ...(other ? { [otherId]: bump(other, 1, 0) } : {}),
     },
-    negotiations: n ? { ...s.negotiations, [n.id]: markCleared(n, { now: nowIso(), newId: id }) } : s.negotiations,
+    negotiations: n ? { ...s.negotiations, [n.id]: markCleared(n, { now: at, newId: id }) } : s.negotiations,
   };
 }
 
-/** The viewer's own binary feedback on the counterparty. Once per transaction. */
-export async function submitFeedback(bookingId: string, recommends: boolean): Promise<void> {
+export type FeedbackResult = { ok: true } | { ok: false; issue: ReviewIssue | 'not-complete' | 'already-given' };
+
+/**
+ * The viewer's review of the counterparty, once per transaction. The form sends a
+ * complete review; voice can send a quick one (recommendation only). Sending it
+ * unseals the counterparty's review of the viewer, and both land on the records.
+ */
+export async function submitFeedback(bookingId: string, input: ReviewInput | boolean, opts: { quick?: boolean } = {}): Promise<FeedbackResult> {
+  const review: ReviewInput = typeof input === 'boolean' ? { recommends: input } : input;
+  const quick = opts.quick ?? typeof input === 'boolean';
+  const b = getState().bookings.find((x) => x.id === bookingId);
+  if (!b || b.status !== 'complete') return { ok: false, issue: 'not-complete' };
+  const viewerId = viewerOf(getState()).id;
+  const role = roleOf(b, viewerId);
+  if (viewerFeedback(b, viewerId) !== undefined) return { ok: false, issue: 'already-given' };
+  const otherRole: ReviewedRole = role === 'buyer' ? 'seller' : 'buyer';
+  const issue = validateReview(review, otherRole, !quick);
+  if (issue) return { ok: false, issue };
   await delay(250);
   setState((s) => {
-    const b = s.bookings.find((x) => x.id === bookingId);
-    if (!b || b.status !== 'complete') return s;
-    const viewerId = viewerOf(s).id;
-    const role = roleOf(b, viewerId);
-    if ((role === 'buyer' ? b.feedback.byBuyer : b.feedback.bySeller) !== undefined) return s;
-    const otherId = counterpartyOf(b, viewerId);
+    const cur = s.bookings.find((x) => x.id === bookingId)!;
+    if (viewerFeedback(cur, viewerId) !== undefined) return s;
+    const mine = toReview(review, nowIso());
+    const theirs = role === 'buyer' ? cur.feedback.bySeller : cur.feedback.byBuyer;
+    const otherId = counterpartyOf(cur, viewerId);
     const other = s.people[otherId];
+    const viewer = s.people[viewerId];
     return {
-      ...updateBooking(s, bookingId, (x) => ({ ...x, feedback: role === 'buyer' ? { ...x.feedback, byBuyer: recommends } : { ...x.feedback, bySeller: recommends } })),
-      people: other ? { ...s.people, [otherId]: bump(other, 0, recommends ? 1 : 0) } : s.people,
+      ...updateBooking(s, bookingId, (x) => ({ ...x, feedback: role === 'buyer' ? { ...x.feedback, byBuyer: mine } : { ...x.feedback, bySeller: mine } })),
+      people: {
+        ...s.people,
+        ...(other ? { [otherId]: receive(other, mine, { name: viewer.name, role }) } : {}),
+        ...(theirs && other ? { [viewerId]: receive(viewer, theirs, { name: other.name, role: otherRole }) } : {}),
+      },
     };
   });
+  return { ok: true };
 }
 
-/** Has the viewer already left feedback on this transaction? */
-export function viewerFeedback(b: Booking, viewerId: string): boolean | undefined {
+/** The viewer's own review on this transaction, if given. */
+export function viewerFeedback(b: Booking, viewerId: string): Review | undefined {
   return roleOf(b, viewerId) === 'buyer' ? b.feedback.byBuyer : b.feedback.bySeller;
+}
+
+/** The counterparty's review of the viewer: sealed until the viewer has left theirs. */
+export function receivedFeedback(b: Booking, viewerId: string): { review?: Review; sealed: boolean } {
+  const review = roleOf(b, viewerId) === 'buyer' ? b.feedback.bySeller : b.feedback.byBuyer;
+  if (!review) return { sealed: false };
+  return viewerFeedback(b, viewerId) ? { review, sealed: false } : { sealed: true };
 }

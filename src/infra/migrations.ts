@@ -56,4 +56,23 @@ export const MIGRATIONS: Record<number, (state: unknown) => unknown> = {
       bookings: (s.bookings ?? []).map((b: AnyState) => ({ total: b.terms?.hours ? b.terms.price * b.terms.hours : b.terms?.price ?? 0, ...b })),
     };
   },
+  /**
+   * v3 → v4: detailed feedback. Yes/no feedback becomes a review with no aspect
+   * ratings; seeded counterparties gain their per-aspect records.
+   */
+  3: (raw) => {
+    const s = raw as AnyState;
+    const asReview = (v: unknown, at: string) => (typeof v === 'boolean' ? { recommends: v, ratings: {}, at } : v);
+    const people = Object.fromEntries(
+      Object.entries((s.people ?? {}) as Record<string, AnyState>).map(([pid, p]) => [pid, p.reputation || !seedPeople[pid] ? p : { ...p, reputation: seedPeople[pid].reputation }])
+    );
+    return {
+      ...s,
+      people,
+      bookings: (s.bookings ?? []).map((b: AnyState) => {
+        const at = b.completedAt ?? b.createdAt ?? nowIso();
+        return { ...b, feedback: { byBuyer: asReview(b.feedback?.byBuyer, at), bySeller: asReview(b.feedback?.bySeller, at) } };
+      }),
+    };
+  },
 };

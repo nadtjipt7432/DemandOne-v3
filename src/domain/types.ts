@@ -10,6 +10,8 @@
  * agreement becomes one shared transaction (`Booking`) with a buyer and a seller.
  */
 
+import type { AspectKey, AspectRating, ReviewedRole } from './feedback';
+
 export type TrustTier = 'everyday' | 'trades' | 'expert';
 
 /** The weighted, rankable Standard of Value. Timing is a hard constraint, not a criterion. */
@@ -144,6 +146,23 @@ export interface Person {
   categories: string[];
   standardOfValue: StandardOfValue;
   capability?: CapabilityProfile;
+  /** Feedback received, rolled up per aspect, with the latest notes. */
+  reputation?: Reputation;
+}
+
+/** One side's feedback on the other, rated against the agreed terms. */
+export interface Review {
+  recommends: boolean;
+  ratings: Partial<Record<AspectKey, AspectRating>>;
+  note?: string;
+  at: string;
+  /** Left by a simulated counterparty (demo). */
+  simulated?: boolean;
+}
+
+export interface Reputation {
+  aspects: Partial<Record<AspectKey, { short: number; met: number; exceeded: number }>>;
+  notes: { text: string; from: string; role: ReviewedRole; at: string }[];
 }
 
 export type CardKind = 'need' | 'offer'; // what the listing's owner is posting
@@ -359,7 +378,8 @@ export interface Booking {
   payment?: { methodLabel: string; authorizedAt: string; demo: true };
   deliveredAt?: string;
   completedAt?: string;
-  feedback: { byBuyer?: boolean; bySeller?: boolean };
+  /** Each side's review of the other. A received review stays sealed until the viewer leaves theirs. */
+  feedback: { byBuyer?: Review; bySeller?: Review };
   createdAt: string;
 }
 

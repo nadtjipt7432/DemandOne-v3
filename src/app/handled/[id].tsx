@@ -11,6 +11,7 @@ import {
   roleOf,
   simulateBuyerConfirmation,
   simulateSellerDelivery,
+  receivedFeedback,
   submitFeedback,
   viewerFeedback,
 } from '@/services/transactions';
@@ -19,6 +20,7 @@ import { getAdjacentListings } from '@/state/myMarket';
 import { AmbientField, CircleMark } from '@/ui/Ambient';
 import { Button, KeyValue, Page, Row, Rule, Section, Stack, T, TopBar } from '@/ui/core';
 import { evidenceLine, MarketRow } from '@/ui/market';
+import { ReviewForm, ReviewSummary, SealedReview } from '@/ui/reputation';
 import { VoicePanel } from '@/ui/VoicePanel';
 import { colors, space } from '@/theme';
 import type { BookingStatus } from '@/domain/types';
@@ -57,6 +59,7 @@ export default function Handled() {
   const price = booking.terms.price;
   const unit = UNIT_SHORT[booking.unit];
   const myFeedback = viewerFeedback(booking, viewer.id);
+  const received = receivedFeedback(booking, viewer.id);
   const stepIndex = booking.status === 'complete' ? (myFeedback === undefined ? 4 : 5) : STEPS.findIndex((x) => x.status === booking.status);
   const related = getAdjacentListings(s, booking, viewer.id);
   const opening = role === 'buyer' ? booking.openingPrice : booking.openingBid ?? booking.openingPrice;
@@ -108,23 +111,24 @@ export default function Handled() {
         </Stack>
       );
     }
-    if (booking.status === 'complete' && myFeedback === undefined) {
+    if (booking.status === 'complete' && myFeedback === undefined && other) {
       return (
-        <Stack gap={space.sm}>
-          <T v="heading">{`Would you work with ${first} again?`}</T>
-          <Row gap={space.sm}>
-            <Button title="Yes" onPress={() => run('yes', () => submitFeedback(booking.id, true))} loading={busy === 'yes'} style={{ flex: 1 }} />
-            <Button kind="secondary" title="No" onPress={() => run('no', () => submitFeedback(booking.id, false))} loading={busy === 'no'} style={{ flex: 1 }} />
-          </Row>
+        <Stack gap={space.lg}>
+          <ReviewForm role={role === 'buyer' ? 'seller' : 'buyer'} name={other.name} onSubmit={(input) => submitFeedback(booking.id, input)} />
+          {received.sealed ? <SealedReview name={other.name} /> : null}
         </Stack>
       );
     }
     if (booking.status === 'complete') {
       return (
-        <Stack gap={space.xs}>
-          <T v="body">{`Thanks — noted on ${first}’s record.`}</T>
-          {other ? <T v="small" color={colors.inkDim} testID="counterparty-record">{`${other.name}: ${evidenceLine(other)}.`}</T> : null}
-          <T v="small" color={colors.inkDim} testID="own-record">{`Your record: ${evidenceLine(viewer)}. ${first}’s feedback on you is simulated in this demo.`}</T>
+        <Stack gap={space.lg}>
+          <T v="body">{`Feedback sent. It’s on ${first}’s record now.`}</T>
+          {myFeedback ? <ReviewSummary title={`Your feedback on ${first}`} review={myFeedback} testID="given-review" /> : null}
+          {received.review ? <ReviewSummary title={`${first}’s feedback on you`} review={received.review} testID="received-review" /> : null}
+          <Stack gap={space.xs}>
+            {other ? <T v="small" color={colors.inkDim} testID="counterparty-record">{`${other.name}: ${evidenceLine(other)}.`}</T> : null}
+            <T v="small" color={colors.inkDim} testID="own-record">{`Your record: ${evidenceLine(viewer)}.`}</T>
+          </Stack>
         </Stack>
       );
     }

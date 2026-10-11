@@ -7,6 +7,8 @@ import { resetDemoMarket, resetDevice, setSpeakReplies, setThemeMode, signOut } 
 import { useAppState, useViewer } from '@/state/hooks';
 import { Button, KeyValue, Page, Row, Rule, Section, Stack, T, ToggleRow } from '@/ui/core';
 import { evidenceLine } from '@/ui/market';
+import { ReputationRecord } from '@/ui/reputation';
+import { summarizeAspects } from '@/domain/feedback';
 import { colors, space } from '@/theme';
 
 /** Profile and settings — the signed-in person's own record, exactly as entered. */
@@ -51,6 +53,12 @@ export default function You() {
         <Rule />
         <KeyValue label="Track record" value={evidenceLine(viewer)} />
       </Section>
+
+      {summarizeAspects(viewer.reputation).length ? (
+        <Section title="How counterparties rated you" note="Against the terms each transaction agreed." ruled>
+          <ReputationRecord person={viewer} counts={false} notes={3} testID="own-reputation" />
+        </Section>
+      ) : null}
 
       <Section title="Standard of value" ruled right={<Button size="sm" kind="quiet" title="Change" onPress={() => router.push('/onboarding')} />}>
         {viewer.standardOfValue.order.map((c, i) => (

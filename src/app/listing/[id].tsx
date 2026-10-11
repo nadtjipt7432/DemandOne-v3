@@ -9,6 +9,8 @@ import { acceptListing, activeNegotiationForCard, defaultOwnLimit, RESULT_TEXT, 
 import { useAppState, useViewer } from '@/state/hooks';
 import { Button, Choice, Field, KeyValue, Page, Row, Rule, Section, Stack, T, TopBar } from '@/ui/core';
 import { CapacityBar, capacityText, evidenceLine, Price, SideLabel } from '@/ui/market';
+import { ReputationRecord } from '@/ui/reputation';
+import { summarizeAspects } from '@/domain/feedback';
 import { colors, space } from '@/theme';
 import type { DeadlineOption, PaymentOption, ScopeOption, VolumeOption } from '@/domain/types';
 
@@ -113,6 +115,12 @@ export default function Listing() {
           </>
         ) : null}
       </Section>
+
+      {person.reputation && summarizeAspects(person.reputation).length ? (
+        <Section title="Rated by past counterparties" note="Against the terms each transaction agreed." ruled>
+          <ReputationRecord person={person} counts={false} notes={3} />
+        </Section>
+      ) : null}
 
       {conflict ? <T v="small" color={colors.rust} style={{ marginTop: space.lg }}>{`Overlaps with ${conflict.title}, which you already have agreed.`}</T> : null}
 

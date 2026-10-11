@@ -334,8 +334,11 @@ async function act(i: Interpretation, ctx: VoiceContext): Promise<AgentReply> {
 
     case 'feedback': {
       if (ctx.kind !== 'booking') return { text: 'Open the transaction to leave feedback.' };
-      await submitFeedback(ctx.bookingId, i.recommends);
-      return { text: 'Thanks — noted on their record.' };
+      const result = await submitFeedback(ctx.bookingId, i.recommends);
+      if (result.ok) return { text: 'Noted on their record. You can see their feedback on you now.' };
+      if (result.issue === 'already-given') return { text: 'You’ve already left feedback on this one.' };
+      if (result.issue === 'unexplained') return { text: 'Understood. Mark what fell short in the feedback below, so their record says why.' };
+      return { text: 'Feedback opens once the work is confirmed complete.' };
     }
 
     case 'adjacent': {

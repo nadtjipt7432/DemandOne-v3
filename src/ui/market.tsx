@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import { strongestAspect } from '@/domain/feedback';
 import { formatMoney } from '@/domain/money';
 import { UNIT_LABEL } from '@/domain/terms';
 import type { CardKind, ListingCapacity, MatchCard, Person, PriceUnit } from '@/domain/types';
@@ -309,6 +310,7 @@ export function OpportunityCard({
 }) {
   const revision = card.revisions?.[card.revisions.length - 1];
   const buying = card.kind === 'offer';
+  const strength = strongestAspect(person.reputation);
   return (
     <View testID="opportunity-card" style={{ marginVertical: space.md, marginHorizontal: -8, padding: space.lg, borderRadius: 14, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.rule, gap: space.md }}>
       <Tap onPress={onCollapse} label={`Collapse ${card.title}`}>
@@ -345,6 +347,7 @@ export function OpportunityCard({
         </Row>
         <T v="small" color={colors.inkDim}>{person.bio}</T>
         <T v="small">{person.completedCount ? `${person.completedCount} verified transactions, ${person.recommendCount} would work with them again${person.trustPaths ? `, ${person.trustPaths} in your network` : ''}` : 'First transaction on DemandOne'}</T>
+        {strength ? <T v="small" color={colors.forest}>{`${strength.label}: rated beyond the agreed terms ${strength.exceeded} of ${strength.total} times`}</T> : null}
       </View>
       {fitLine ? <T v="small" color={colors.inkDim}>{fitLine}</T> : null}
       <Row gap={space.sm}>

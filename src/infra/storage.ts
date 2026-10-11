@@ -21,7 +21,7 @@ export interface KeyValueStorage {
 }
 
 export const STORAGE_KEY = 'demandone-v3';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 type Migration = (state: unknown) => unknown;
 

@@ -46,7 +46,7 @@ function describeDecision(d: Decision, s: AppState, viewerId: string): { headlin
     pay: { headline: 'Authorize the payment to start the work.', detail: `${b.title}. ${formatMoney(b.fees.buyerTotal)} is held until you confirm the work. Demo payment.`, cta: 'Authorize' },
     deliver: { headline: `${who} has paid. Deliver when ready.`, detail: `${b.title}, due ${b.deliveryLabel}.`, cta: 'Open transaction' },
     confirm: { headline: `${who} has delivered.`, detail: 'Confirm the work is done to release payment.', cta: 'Confirm' },
-    feedback: { headline: `Would you work with ${who} again?`, detail: 'One tap. It updates their verified record.', cta: 'Answer' },
+    feedback: { headline: `Would you work with ${who} again?`, detail: 'Rate it against the terms you agreed. Their feedback on you opens when you send yours.', cta: 'Leave feedback' },
   }[d.kind];
   return { ...map, route: { pathname: '/handled/[id]', params: { id: b.id } } };
 }

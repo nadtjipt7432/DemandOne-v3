@@ -60,7 +60,21 @@ test('6–14 · buyer journey: structured negotiation through cleared transactio
   await action.getByRole('button', { name: "Simulate Alex's delivery (demo)" }).click();
   await action.getByRole('button', { name: 'Confirm the work is done' }).click();
   await expect(page.getByTestId('handled-title')).toHaveText('Cleared.');
-  await action.getByRole('button', { name: 'Yes' }).click();
+  // Detailed feedback: against the agreed terms, with Alex's sealed until ours is sent.
+  const form = page.getByTestId('review-form');
+  await expect(page.getByTestId('sealed-review')).toBeVisible();
+  await form.getByRole('button', { name: 'Send feedback' }).click();
+  await expect(page.getByTestId('review-issue')).toHaveText('Say whether you’d work with Alex again.');
+  await form.getByRole('radiogroup', { name: 'Would you work with Alex again?' }).getByRole('radio', { name: 'Yes' }).click();
+  for (const [aspect, rating] of [['Quality of work', 'Beyond'], ['Delivered on time', 'As agreed'], ['Communication', 'As agreed'], ['Kept to the agreed scope', 'As agreed']]) {
+    await form.getByRole('radiogroup', { name: aspect }).getByRole('radio', { name: rating }).click();
+  }
+  await page.getByRole('textbox', { name: 'One line for their record (optional)' }).fill('Sharp model, and the downside case changed our offer.');
+  await shot(page, '10a-feedback-form');
+  await form.getByRole('button', { name: 'Send feedback' }).click();
+  await expect(page.getByTestId('given-review')).toContainText('Beyond');
+  await expect(page.getByTestId('received-review')).toContainText('Simulated');
+  await expect(page.getByTestId('sealed-review')).toHaveCount(0);
   await expect(page.getByTestId('counterparty-record')).toHaveText('Alex Chen: 15 verified, 14 recommend, 1 in your network.');
   await expect(page.getByTestId('own-record')).toContainText('Your record: 1 verified, 1 recommend');
   await expect(page.getByText('Often needed next')).toBeVisible();
@@ -68,6 +82,8 @@ test('6–14 · buyer journey: structured negotiation through cleared transactio
 
   await page.goto('/you');
   await expect(page.getByText('1 verified, 1 recommend')).toBeVisible();
+  await expect(page.getByTestId('own-reputation')).toContainText('Confirmed promptly');
+  await expect(page.getByTestId('own-reputation')).toContainText('Clear brief and confirmed the same day');
 });
 
 test('11 · a lowball proposal is rejected — negotiations can fail', async ({ page }) => {

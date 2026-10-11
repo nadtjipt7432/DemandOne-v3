@@ -106,13 +106,15 @@ describe('buyer journey', () => {
     await confirmCompletion(bookingId);
     expect(booking().status).toBe('complete');
     expect(getState().negotiations[negId].status).toBe('cleared');
-    expect(me()).toMatchObject({ completedCount: 1, recommendCount: 1 });
+    // Alex's (simulated) feedback is in, but sealed and off the record until ours is sent.
+    expect(me()).toMatchObject({ completedCount: 1, recommendCount: 0 });
     expect(getState().people.alex.completedCount).toBe(alexBefore.completedCount + 1);
 
-    await submitFeedback(bookingId, true);
-    await submitFeedback(bookingId, true);
+    expect(await submitFeedback(bookingId, true)).toEqual({ ok: true });
+    expect(await submitFeedback(bookingId, true)).toEqual({ ok: false, issue: 'already-given' });
     expect(getState().people.alex.recommendCount).toBe(alexBefore.recommendCount + 1);
-    expect(booking().feedback.byBuyer).toBe(true);
+    expect(booking().feedback.byBuyer).toMatchObject({ recommends: true });
+    expect(me()).toMatchObject({ completedCount: 1, recommendCount: 1 });
   });
 
   it('can take the listing as it stands', async () => {

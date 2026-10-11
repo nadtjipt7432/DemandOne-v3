@@ -1,4 +1,5 @@
-import type { AppState, Category, Complexity, MatchCard, Person } from '@/domain/types';
+import { ASPECTS, ReviewedRole } from '@/domain/feedback';
+import type { AppState, Category, Complexity, MatchCard, Person, Reputation } from '@/domain/types';
 
 /**
  * The demo market a new account walks into: fictional counterparties and their
@@ -27,8 +28,50 @@ function person(p: Pick<Person, 'id' | 'name' | 'initials' | 'location' | 'compl
     needs: [],
     offers: [],
     standardOfValue: { order: ['expertise', 'trust', 'budget', 'geography'] },
+    reputation: seedReputation(p),
     ...p,
   };
+}
+
+/** Who mostly sells and who mostly buys, for the shape of their seeded records. */
+const BUYERS = new Set(['halden', 'lumen', 'nova', 'kite', 'northbridge', 'omar']);
+
+/** Recent notes from past counterparties (fictional). */
+const NOTES: Record<string, { text: string; from: string }[]> = {
+  alex: [
+    { text: 'Model was board-ready a day early, and every assumption was sourced.', from: 'Kite Labs' },
+    { text: 'Pushed back on our growth case, which turned out to be right.', from: 'Nova Robotics' },
+  ],
+  priya: [{ text: 'Rebuilt our reforecast in a week; the scenario tab alone was worth it.', from: 'Lumen Health' }],
+  meridian: [
+    { text: 'Found a working-capital issue the seller hadn’t disclosed.', from: 'Northbridge Partners' },
+    { text: 'Thorough, but the scope grew and so did the timeline.', from: 'Halden Capital' },
+  ],
+  claire: [{ text: 'Clear structuring options with the trade-offs costed out.', from: 'Omar Haddad' }],
+  harper: [{ text: 'Practical go-to-market plan, not a slide deck.', from: 'Halden Capital' }],
+  northbridge: [{ text: 'Precise brief and fast sign-off on delivery.', from: 'Alex Chen' }],
+  halden: [{ text: 'Clear on what they needed; added one request mid-way.', from: 'Meridian Advisory' }],
+};
+
+/**
+ * A plausible, deterministic per-aspect record for a seeded counterparty: every
+ * completed transaction rated on each aspect, the few non-recommendations showing
+ * up as "fell short" on one aspect, and a share rated "beyond".
+ */
+function seedReputation(p: Pick<Person, 'id' | 'completedCount' | 'recommendCount'>): Reputation | undefined {
+  if (p.completedCount === 0) return undefined;
+  const role: ReviewedRole = BUYERS.has(p.id) ? 'buyer' : 'seller';
+  const n = p.completedCount;
+  const hash = [...p.id].reduce((h, c) => h + c.charCodeAt(0), 0);
+  const weakest = hash % 4;
+  const aspects: Reputation['aspects'] = {};
+  ASPECTS[role].forEach((a, i) => {
+    const short = i === weakest ? n - p.recommendCount : 0;
+    const exceeded = Math.min(n - short, Math.round(n * [0.45, 0.3, 0.2, 0.35][(i + hash) % 4]));
+    aspects[a.key] = { short, met: n - short - exceeded, exceeded };
+  });
+  const notes = (NOTES[p.id] ?? []).map((x, i) => ({ ...x, role: (role === 'buyer' ? 'seller' : 'buyer') as ReviewedRole, at: `2026-09-${String(20 - i * 9).padStart(2, '0')}T10:00:00.000Z` }));
+  return { aspects, notes };
 }
 
 const counterparties: Person[] = [

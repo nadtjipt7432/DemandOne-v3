@@ -299,7 +299,7 @@ export function Tabs<K extends string>({ items, value, onChange }: { items: { ke
 }
 
 /** A small set of mutually exclusive options (terms, priorities). */
-export function Choice<K extends string>({ label, options, value, onChange }: { label: string; options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
+export function Choice<K extends string>({ label, options, value, onChange }: { label: string; options: { key: K; label: string }[]; value: K | undefined; onChange: (k: K) => void }) {
   return (
     <View style={{ gap: 6 }}>
       <T v="label" color={colors.inkDim}>{label}</T>
