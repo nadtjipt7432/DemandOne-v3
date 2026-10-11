@@ -6,7 +6,7 @@
  */
 import { useEffect } from 'react';
 import { View, ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, LinearGradient, Mask, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { field } from '@/theme';
 
@@ -107,15 +107,20 @@ export function Halftone({ size, color, dot = 1.6, gap = 7, id }: { size: number
   );
 }
 
+/** How the mark leaves the screen: `join` merges and blooms (entering), `part` drifts apart (leaving). */
+export type MarkExit = 'join' | 'part';
+
 /**
  * The overlapping-circle mark: a solid forest disc and a halftone amber disc —
  * buyer and seller. `meet` animates the two together (a clearing); otherwise they
- * drift almost imperceptibly.
+ * drift almost imperceptibly. `exit` plays a one-off departure.
  */
-export function CircleMark({ size, meet = false, onNight = false, style }: { size: number; meet?: boolean; onNight?: boolean; style?: ViewStyle }) {
+export function CircleMark({ size, meet = false, onNight = false, exit, style }: { size: number; meet?: boolean; onNight?: boolean; exit?: MarkExit; style?: ViewStyle }) {
   const reduced = useReducedMotion();
   const offset = useSharedValue(meet ? size * 0.42 : 0);
   const drift = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const fade = useSharedValue(1);
   useEffect(() => {
     if (reduced) {
       offset.value = 0;
@@ -124,15 +129,30 @@ export function CircleMark({ size, meet = false, onNight = false, style }: { siz
     if (meet) offset.value = withDelay(250, withTiming(0, { duration: 1400, easing: Easing.out(Easing.cubic) }));
     drift.value = withRepeat(withSequence(withTiming(1, { duration: 7000, easing: Easing.inOut(Easing.sin) }), withTiming(0, { duration: 7000, easing: Easing.inOut(Easing.sin) })), -1);
   }, [meet, reduced, offset, drift]);
+  useEffect(() => {
+    if (!exit || reduced) return;
+    cancelAnimation(drift);
+    drift.value = withTiming(0, { duration: 300 });
+    if (exit === 'join') {
+      // The discs slide onto each other, then the merged mark opens outward.
+      offset.value = withTiming(-size * 0.31, { duration: 650, easing: Easing.inOut(Easing.cubic) });
+      scale.value = withDelay(600, withTiming(7, { duration: 650, easing: Easing.in(Easing.cubic) }));
+      fade.value = withDelay(750, withTiming(0, { duration: 500 }));
+    } else {
+      offset.value = withTiming(size * 0.9, { duration: 900, easing: Easing.inOut(Easing.cubic) });
+      fade.value = withDelay(250, withTiming(0, { duration: 650 }));
+    }
+  }, [exit, reduced, size, offset, drift, scale, fade]);
+  const whole = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ scale: scale.value }] }));
   const left = useAnimatedStyle(() => ({ transform: [{ translateX: -offset.value + drift.value * size * 0.03 }, { translateY: drift.value * size * 0.02 }] }));
   const right = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value - drift.value * size * 0.03 }, { translateY: -drift.value * size * 0.02 }] }));
   const r = size;
   return (
-    <View pointerEvents="none" style={[{ width: r * 1.62, height: r }, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Animated.View pointerEvents="none" style={[{ width: r * 1.62, height: r }, whole, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: r, height: r, borderRadius: r / 2, backgroundColor: onNight ? '#2E6A58' : field.forest }, left]} />
       <Animated.View style={[{ position: 'absolute', left: r * 0.62, top: 0 }, right]}>
         <Halftone id={`mark${size}`} size={r} color={onNight ? '#E0A55A' : field.rust} dot={r / 70} gap={r / 22} />
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
