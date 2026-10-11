@@ -187,7 +187,7 @@ export type VoiceContext =
   | { kind: 'none' }
   | { kind: 'draft'; draft: MandateDraft }
   | { kind: 'negotiation'; negotiationId: string; role: 'buyer' | 'seller'; listedDeadline: string }
-  | { kind: 'bids'; offerId: string }
+  | { kind: 'bids'; offerId: string; names: string[] }
   | { kind: 'booking'; bookingId: string; role: 'buyer' | 'seller'; status: string };
 
 export interface TermsChange {
@@ -205,8 +205,8 @@ export type Interpretation =
   | { type: 'decline' }
   | { type: 'negotiation'; action: 'accept' | 'hold' | 'stop' | 'status' }
   | { type: 'negotiation'; action: 'propose'; change: TermsChange }
-  | { type: 'bids'; action: 'compare' }
-  | { type: 'bids'; action: 'accept'; pick: 'recurring' | 'single' | 'higher-rate' | 'higher-total' }
+  | { type: 'bids'; action: 'compare' | 'best' | 'pairs' | 'flexible' }
+  | { type: 'bids'; action: 'what-if' | 'accept'; name: string }
   | { type: 'capacity'; hours: number }
   | { type: 'delivery' }
   | { type: 'feedback'; recommends: boolean }
@@ -339,10 +339,15 @@ export function interpret(text: string, context: VoiceContext): Interpretation {
   }
 
   if (context.kind === 'bids') {
-    if (/\b(compare|which|difference|better)\b/.test(lower)) return { type: 'bids', action: 'compare' };
-    if (/\b(recurring|monthly|ongoing)\b/.test(lower)) return { type: 'bids', action: 'accept', pick: 'recurring' };
-    if (/\b(single|one[- ]off|just once|higher rate)\b/.test(lower)) return { type: 'bids', action: 'accept', pick: 'single' };
-    if (/\b(more money|higher total|bigger)\b/.test(lower)) return { type: 'bids', action: 'accept', pick: 'higher-total' };
+    const named = (word: string | undefined) => (word ? context.names.find((n) => n.toLowerCase().startsWith(word.toLowerCase())) : undefined);
+    const whatIf = lower.match(/\bwhat (?:happens|if)\b.*\b(?:accept|take|go with)\s+([a-z]+)/);
+    if (whatIf && named(whatIf[1])) return { type: 'bids', action: 'what-if', name: named(whatIf[1])! };
+    if (/\bflexib|\bleaves? me\b.*\bmost\b/.test(lower)) return { type: 'bids', action: 'flexible' };
+    if (/\b(two of them|both|take on two|more than one|several of them|two at once)\b/.test(lower)) return { type: 'bids', action: 'pairs' };
+    if (/\b(best|recommend|should i|for me|which (?:one|proposal|bid|of these))\b/.test(lower)) return { type: 'bids', action: 'best' };
+    if (/\b(compare|difference)\b/.test(lower)) return { type: 'bids', action: 'compare' };
+    const accept = lower.match(/\b(?:accept|take|go with)\s+([a-z]+)/);
+    if (accept && named(accept[1])) return { type: 'bids', action: 'accept', name: named(accept[1])! };
   }
 
   if (context.kind === 'booking') {

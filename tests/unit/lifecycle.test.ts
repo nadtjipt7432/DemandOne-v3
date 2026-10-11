@@ -144,11 +144,11 @@ describe('seller journey', () => {
   it('releasing an offer draws competing bids, and a sale completes on both records', async () => {
     const offerId = await createPosition({ mode: 'offer', title: 'Financial modeling, 10 hours next week', category: 'finance', price: 150, unit: 'hour', capacityHours: 10 });
     const bids = bidsOnOffer(getState(), offerId);
-    expect(bids).toHaveLength(2);
-    expect(new Set(bids.map((b) => b.proposals[1].terms.volume))).toEqual(new Set(['recurring', 'single']));
+    expect(bids).toHaveLength(5);
+    expect(bids.every((b) => b.request && b.proposals[1].terms.hours === b.request.hours)).toBe(true);
     expect(getDecisions(getState(), me().id).some((d) => d.kind === 'bids')).toBe(true);
 
-    const pick = bids[0];
+    const pick = bids.find((b) => b.request!.hours <= 5)!;
     const res = await acceptCounter(pick.id);
     const bookingId = res.ok ? res.bookingId! : '';
     const b = () => getState().bookings.find((x) => x.id === bookingId)!;

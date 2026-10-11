@@ -76,8 +76,9 @@ export function roundTo(price: number, step: number, dir: 'up' | 'down' | 'neare
   return f(price / step) * step;
 }
 
-/** Rounding step that suits the magnitude: £5 under £1k, £50 under £10k, £250 above. */
+/** Rounding step that suits the magnitude: £1 for hourly rates, £5 under £1k, £50 under £10k, £250 above. */
 export function priceStep(price: number): number {
+  if (price < 300) return 1;
   if (price < 1000) return 5;
   if (price < 10000) return 50;
   return 250;

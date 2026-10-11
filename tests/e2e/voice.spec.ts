@@ -1,11 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { button, shot, signUp, tab } from './helpers';
-
-/** Typed input goes through exactly the same interpreter and agent as speech. */
-async function say(page: Page, text: string) {
-  await page.getByRole('textbox', { name: 'Type to DemandOne', exact: true }).fill(text);
-  await page.getByRole('textbox', { name: 'Type to DemandOne', exact: true }).press('Enter');
-}
+import { button, openListing, say, shot, signUp, tab } from './helpers';
 
 test('voice-first need: ambiguous sentence → structured mandate → follow-ups → market', async ({ page }) => {
   await signUp(page);
@@ -32,8 +26,7 @@ test('voice-first need: ambiguous sentence → structured mandate → follow-ups
 
 test('voice negotiation: a spoken conditional becomes a structured, confirmed proposal', async ({ page }) => {
   await signUp(page);
-  await tab(page, 'Exchange');
-  await page.getByRole('button', { name: /^Offer: Series A financial model/ }).first().click();
+  await openListing(page, /^Offer: Series A financial model/);
   await button(page, 'Negotiate terms').click();
   await page.getByRole('textbox', { name: 'Your private maximum', exact: true }).fill('5600');
   await page.getByRole('textbox', { name: 'Opening bid', exact: true }).fill('4800');
@@ -49,7 +42,7 @@ test('voice negotiation: a spoken conditional becomes a structured, confirmed pr
   await shot(page, '12-voice-negotiation');
 });
 
-test('voice seller: release capacity, receive competing bids, compare them', async ({ page }) => {
+test('voice seller: release capacity, receive proposals, ask which is best', async ({ page }) => {
   await signUp(page);
   await tab(page, 'Speak');
   await say(page, 'I have 10 hours next week for financial modeling at about £150 an hour.');
@@ -58,8 +51,8 @@ test('voice seller: release capacity, receive competing bids, compare them', asy
   await expect(page.getByTestId('agent-reply').filter({ visible: true })).toContainText('Shall I release it to the market?');
   await button(page, 'Yes, go ahead').click();
   await expect(page).toHaveURL(/\/position\//);
-  await expect(page.getByText('2 bids on your capacity')).toBeVisible();
-  await say(page, 'Which bid is better?');
-  await expect(page.getByTestId('agent-reply').filter({ visible: true })).toContainText('Two buyers are interested in your capacity');
+  await expect(page.getByTestId('allocation-summary')).toHaveAttribute('aria-label', /^5 proposals received/);
+  await say(page, 'Which of these proposals is best for me?');
+  await expect(page.getByTestId('agent-reply').filter({ visible: true })).toContainText("For your priorities I'd go with");
   await shot(page, '13-bids');
 });

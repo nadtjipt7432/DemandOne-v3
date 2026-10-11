@@ -81,6 +81,18 @@ export interface Need {
   createdAt: string;
 }
 
+/**
+ * negotiating: the seller's agent is working the selected bids;
+ * ready: outcomes are in, awaiting the seller's approval;
+ * committed: approved — hours are committed, transactions exist.
+ */
+export interface AllocationPlan {
+  strategy: string;
+  negotiationIds: string[];
+  status: 'negotiating' | 'ready' | 'committed';
+  authorizedAt: string;
+}
+
 /** One of the viewer's own Offers. `floorPrice` is the viewer's private minimum. */
 export interface Offer {
   id: string;
@@ -96,6 +108,10 @@ export interface Offer {
   timing: TimingSpec;
   /** Hours released to the market, when the offer is time-based. */
   capacityHours?: number;
+  /** Hours released per week, when spread over several weeks. Sums to capacityHours. */
+  weeklyHours?: number[];
+  /** The allocation the seller authorized across competing bids. */
+  allocation?: AllocationPlan;
   locationMode: LocationMode;
   priorities: Criterion[];
   createdAt: string;
@@ -196,11 +212,14 @@ export type VolumeOption = 'single' | 'recurring';
 
 /** A complete set of terms. Every proposal carries one. */
 export interface Terms {
+  /** Per unit (per hour for hourly work). */
   price: number;
   deadline: DeadlineOption;
   scope: ScopeOption;
   payment: PaymentOption;
   volume: VolumeOption;
+  /** Hours of work, for hourly engagements. The engagement's value is price × hours. */
+  hours?: number;
 }
 
 export type Side = 'buyer' | 'seller';
@@ -272,6 +291,17 @@ export interface ListingSnapshot {
   offerId?: string;
 }
 
+export type Complexity = 'light' | 'standard' | 'complex';
+
+/** What a buyer asked for when bidding on capacity — public to both sides. */
+export interface EngagementRequest {
+  summary: string;
+  hours: number;
+  /** Which released week the work falls in (0-based). */
+  week: number;
+  complexity: Complexity;
+}
+
 /** One record, shared by buyer and seller. */
 export interface Negotiation {
   id: string;
@@ -289,6 +319,8 @@ export interface Negotiation {
   expiresAt?: string;
   agreedProposalId?: string;
   bookingId?: string;
+  /** For bids on released capacity: the engagement the buyer wants. */
+  request?: EngagementRequest;
   events: NegotiationEvent[];
 }
 
@@ -314,8 +346,12 @@ export interface Booking {
   buyerId: string;
   sellerId: string;
   terms: Terms;
-  /** The opening public price — the honest reference for "below the initial ask". */
+  /** The seller's first ask — the honest reference for "below the initial ask". */
   openingPrice: number;
+  /** The buyer's first bid — the reference for "above the initial bid". */
+  openingBid?: number;
+  /** Agreed total: price × hours for hourly work, else the price. Fees are on this. */
+  total: number;
   fees: Fees;
   status: BookingStatus;
   deliveryLabel: string;

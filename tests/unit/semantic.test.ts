@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { interpret, missingFields, parseBudget, parseTiming, type MandateDraft } from '@/domain/semantic';
+import { interpret, missingFields, parseBudget, parseTiming, type MandateDraft, type VoiceContext } from '@/domain/semantic';
 
 const none = { kind: 'none' } as const;
 
@@ -79,9 +79,14 @@ describe('negotiation by voice', () => {
 });
 
 describe('other contexts', () => {
-  it('compares and picks competing bids', () => {
-    expect(interpret('Which bid is better?', { kind: 'bids', offerId: 'o1' })).toEqual({ type: 'bids', action: 'compare' });
-    expect(interpret('Take the recurring one', { kind: 'bids', offerId: 'o1' })).toMatchObject({ action: 'accept', pick: 'recurring' });
+  it('answers the seller’s allocation questions by intent', () => {
+    const bids: VoiceContext = { kind: 'bids', offerId: 'o1', names: ['Northbridge Partners', 'Halden Capital', 'Kite Labs'] };
+    expect(interpret('Which of these proposals is best for me?', bids)).toEqual({ type: 'bids', action: 'best' });
+    expect(interpret('Can I take on two of them?', bids)).toEqual({ type: 'bids', action: 'pairs' });
+    expect(interpret('What happens if I accept Northbridge?', bids)).toEqual({ type: 'bids', action: 'what-if', name: 'Northbridge Partners' });
+    expect(interpret('Which option leaves me the most flexibility?', bids)).toEqual({ type: 'bids', action: 'flexible' });
+    expect(interpret('Accept Kite', bids)).toEqual({ type: 'bids', action: 'accept', name: 'Kite Labs' });
+    expect(interpret('What happens if I accept Acme?', bids).type).not.toBe('bids');
   });
 
   it('adjusts capacity, confirms delivery, takes feedback, explores adjacent services', () => {

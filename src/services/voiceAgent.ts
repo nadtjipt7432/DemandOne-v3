@@ -8,6 +8,8 @@ import { computeFees } from '@/domain/pricing';
 import { getState, id } from '@/state/store';
 import { ADJACENT_CATEGORIES } from '@/state/myMarket';
 import { getVoiceSession, setVoiceSession, type PendingAction } from '@/state/voiceSession';
+import { consequencesOf, feasiblePairs, type Strategy } from '@/domain/allocation';
+import { allocationView } from './allocation';
 import { createPosition, setOfferCapacity } from './market';
 import { acceptCounter, bidsOnOffer, holdPosition, ownLimit, proposeTerms, stopNegotiation } from './negotiation';
 import { confirmCompletion, markDelivered, submitFeedback } from './transactions';
@@ -52,7 +54,10 @@ function resolveContext(screen: ScreenContext): VoiceContext {
     const n = s.negotiations[screen.negotiationId];
     if (n) return { kind: 'negotiation', negotiationId: n.id, role: sideOf(n, viewerId), listedDeadline: n.listing.timingLabel };
   }
-  if (screen.kind === 'bids') return { kind: 'bids', offerId: screen.offerId };
+  if (screen.kind === 'bids') {
+    const names = Object.values(s.negotiations).filter((n) => n.listing.offerId === screen.offerId).map((n) => s.people[n.buyerId]?.name).filter(Boolean) as string[];
+    return { kind: 'bids', offerId: screen.offerId, names };
+  }
   if (screen.kind === 'booking') {
     const b = s.bookings.find((x) => x.id === screen.bookingId);
     if (b) return { kind: 'booking', bookingId: b.id, role: b.buyerId === viewerId ? 'buyer' : 'seller', status: b.status };
@@ -109,6 +114,7 @@ async function postDraft(d: MandateDraft): Promise<AgentReply> {
     price,
     unit: d.unit ?? 'fixed',
     capacityHours: d.mode === 'offer' ? d.hours : undefined,
+    weeks: d.timingLabel && /\b(2|two)\s+weeks?\b/i.test(d.timingLabel) ? 2 : 1,
     timing: { type: d.timingLabel ? 'window' : 'flexible', deadlineLabel: d.timingLabel, window: { startHour: 0, endHour: hours, label: d.timingLabel ?? 'Flexible' } },
   });
   setVoiceSession((v) => ({ ...v, draft: undefined, stage: undefined, asked: [], pending: undefined }));
@@ -116,7 +122,7 @@ async function postDraft(d: MandateDraft): Promise<AgentReply> {
   if (d.mode === 'offer') {
     const bids = bidsOnOffer(after, positionId);
     return {
-      text: bids.length > 0 ? `Released. ${bids.length === 2 ? 'Two buyers are' : 'A buyer is'} already interested in your capacity.` : "Released. I'll tell you when a buyer bids.",
+      text: bids.length > 0 ? `Released. ${bids.length === 1 ? 'A buyer is' : `${['', '', 'Two', 'Three', 'Four', 'Five', 'Six'][bids.length] ?? bids.length} buyers are`} already interested in your capacity.` : "Released. I'll tell you when a buyer bids.",
       navigate: { pathname: '/position/[id]', params: { id: positionId } },
     };
   }
@@ -255,32 +261,55 @@ async function act(i: Interpretation, ctx: VoiceContext): Promise<AgentReply> {
     }
 
     case 'bids': {
-      if (ctx.kind !== 'bids') return { text: 'Open one of your offers to compare its bids.' };
-      const bids = bidsOnOffer(s, ctx.offerId).filter((b) => b.status === 'countered');
-      if (bids.length === 0) return { text: 'There are no open bids on this offer.' };
-      const described = bids.map((b) => {
-        const bid = latestBy(b, 'buyer')!;
-        const engagements = bid.terms.volume === 'recurring' ? 3 : 1;
-        return { b, bid, engagements, total: bid.terms.price * engagements, who: nameOf(b.buyerId) };
-      });
-      if (i.action === 'compare') {
-        if (described.length === 1) return { text: `${described[0].who} bids ${formatMoney(described[0].bid.terms.price)}.` };
-        const [a, b] = [...described].sort((x, y) => y.total - x.total);
+      if (ctx.kind !== 'bids') return { text: 'Open your released capacity to talk through its proposals.' };
+      const offer = viewer.offers.find((o) => o.id === ctx.offerId);
+      if (!offer) return { text: 'That offer is no longer active.' };
+      const v = allocationView(s, offer);
+      const first = (name: string) => name.split(' ')[0];
+      const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+      const describe = (st: Strategy) => `${list(st.picks.map((c) => first(c.name)))}: ${st.hours} hours for ${formatMoney(st.earnings)}, leaving ${st.free} free`;
+      if (offer.allocation) return { text: `You've already authorized the ${offer.allocation.strategy === 'earnings' ? 'highest-earning' : offer.allocation.strategy === 'simple' ? 'simplest' : 'most flexible'} allocation. ${offer.allocation.status === 'ready' ? 'The outcomes are ready for your approval.' : offer.allocation.status === 'committed' ? 'It is committed.' : 'Your agent is still negotiating.'}` };
+      if (v.candidates.length === 0) return { text: v.proposals.length ? 'None of the open proposals meet your minimum.' : 'There are no proposals on this capacity yet.' };
+
+      if (i.action === 'best' || i.action === 'compare') {
+        const rec = v.recommended;
+        const top = v.strategies.find((x) => x.key === 'earnings');
+        if (!rec) return { text: 'No combination of these proposals fits your free hours.' };
+        const why = rec.key === 'earnings' ? 'It earns the most and suits your priorities.' : rec.key === 'simple' ? 'It keeps you to one counterparty with a strong record.' : 'It earns the best rate and keeps half your time open.';
+        const contrast = top && top !== rec ? ` The highest-earning mix is ${describe(top)} — more money, more to coordinate.` : '';
+        return { text: `${v.proposals.length} proposals in. For your priorities I'd go with ${rec.title.toLowerCase()}: ${describe(rec)}. ${why}${contrast}` };
+      }
+      if (i.action === 'flexible') {
+        const flex = v.strategies.find((x) => x.key === 'flexible') ?? [...v.strategies].sort((a, b) => b.free - a.free)[0];
+        if (!flex) return { text: 'No combination fits your free hours.' };
+        const roomier = v.strategies.find((x) => x.free > flex.free);
+        const note = roomier ? ` ${list(roomier.picks.map((c) => first(c.name)))} alone would leave ${roomier.free} free, but at ${formatMoney(roomier.effectiveRate)} an hour rather than ${formatMoney(flex.effectiveRate)}.` : '';
+        return { text: `${flex.title}: ${describe(flex)}, at the best rate of the mixes.${note}` };
+      }
+      if (i.action === 'pairs') {
+        const { pairs, conflicts } = feasiblePairs(v.candidates, v.capacity);
+        if (pairs.length === 0) return { text: 'No two of these fit together in your free hours.' };
+        const [a, b] = pairs[0];
+        const clash = conflicts.find(([x, y]) => x.week === y.week);
         return {
-          text: `Two buyers are interested in your capacity. ${a.who} offers more in total — ${formatMoney(a.bid.terms.price)} across ${a.engagements === 3 ? 'three monthly engagements' : 'one engagement'}. ${b.who} offers ${formatMoney(b.bid.terms.price)} for ${b.engagements === 1 ? 'one engagement, leaving room for another' : 'three engagements'}.`,
+          text: `Yes. ${first(a.name)} and ${first(b.name)} fit together: ${a.hours + b.hours} hours for ${formatMoney(a.total + b.total)}.${clash ? ` ${first(clash[0].name)} and ${first(clash[1].name)} don't — together they need ${clash[0].hours + clash[1].hours} hours in week ${clash[0].week + 1}, which has ${v.capacity.weeks[clash[0].week].free}.` : ''}`,
         };
       }
-      const chosen =
-        i.pick === 'recurring'
-          ? described.find((d) => d.engagements === 3)
-          : i.pick === 'single'
-            ? described.find((d) => d.engagements === 1)
-            : i.pick === 'higher-total'
-              ? [...described].sort((x, y) => y.total - x.total)[0]
-              : [...described].sort((x, y) => y.bid.terms.price - x.bid.terms.price)[0];
-      if (!chosen) return { text: "I couldn't find that bid." };
-      setVoiceSession((v) => ({ ...v, pending: { kind: 'accept', negotiationId: chosen.b.id } }));
-      return { text: `Accept ${chosen.who}'s bid of ${formatMoney(chosen.bid.terms.price)}? You'd receive ${formatMoney(computeFees(chosen.bid.terms.price).sellerNet)} after the fee.` };
+      if (i.action !== 'what-if' && i.action !== 'accept') return { text: 'Tell me which proposal you mean.' };
+      const target = v.candidates.find((c) => c.name === i.name);
+      if (!target) {
+        const below = v.belowMinimum.find((n) => s.people[n.buyerId]?.name === i.name);
+        return { text: below ? `${first(i.name)}'s bid is below your minimum, so I've left it out.` : `There's no open proposal from ${first(i.name)}.` };
+      }
+      if (i.action === 'what-if') {
+        const c = consequencesOf(target, v.candidates, v.capacity);
+        if (!c.fitsNow) return { text: `${first(target.name)} needs ${target.hours} hours in week ${target.week + 1}, and only ${v.capacity.weeks[target.week].free} are free.` };
+        const blocked = c.blocked.length ? ` ${list(c.blocked.map((x) => first(x.name)))} would no longer fit.` : ' Everything else still fits.';
+        const still = c.stillFit.length && c.blocked.length ? ` ${list(c.stillFit.map((x) => first(x.name)))} still could.` : '';
+        return { text: `Accepting ${first(target.name)} uses ${target.hours} of week ${target.week + 1}'s ${v.capacity.weeks[target.week].free} free hours, for ${formatMoney(target.total)}.${blocked}${still}` };
+      }
+      setVoiceSession((x) => ({ ...x, pending: { kind: 'accept', negotiationId: target.negotiation.id } }));
+      return { text: `Accept ${first(target.name)}'s bid: ${target.hours} hours at ${formatMoney(target.rate)} an hour, ${formatMoney(target.total)}? You'd receive ${formatMoney(computeFees(target.total).sellerNet)} after the fee.` };
     }
 
     case 'capacity': {

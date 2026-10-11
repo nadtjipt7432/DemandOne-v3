@@ -12,7 +12,7 @@ import { formatMoney } from '@/domain/money';
 import { UNIT_LABEL } from '@/domain/terms';
 import type { CardKind, ListingCapacity, MatchCard, Person, PriceUnit } from '@/domain/types';
 import { colors, space } from '@/theme';
-import { Row, T, Tap } from './core';
+import { Button, Row, T, Tap } from './core';
 import { Icon } from './Icon';
 
 /* ---------------------------------------------------------------- marks */
@@ -175,6 +175,7 @@ export function MarketRow({
   categoryLabel,
   state,
   stateTone = 'quiet',
+  stateKind,
   forYou,
   onOpen,
   onAction,
@@ -184,6 +185,7 @@ export function MarketRow({
   categoryLabel: string;
   state: string;
   stateTone?: 'quiet' | 'live';
+  stateKind?: MarketStateKind;
   forYou?: boolean;
   onOpen: () => void;
   onAction?: () => void;
@@ -196,7 +198,7 @@ export function MarketRow({
       <Tap onPress={onOpen} label={`${card.kind === 'need' ? 'Need' : 'Offer'}: ${card.title}, ${formatMoney(card.price)} ${UNIT_LABEL[card.unit]}`}>
         <Row justify="space-between">
           <SideLabel kind={card.kind} detail={categoryLabel} />
-          <T v="label" color={stateTone === 'live' ? colors.amberText : showFor ? colors.forest : colors.inkFaint}>{showFor ? 'For you' : state}</T>
+          {showFor ? <T v="label" color={colors.forest}>For you</T> : stateKind ? <MarketState state={stateKind} label={state} /> : <T v="label" color={stateTone === 'live' ? colors.amberText : colors.inkFaint}>{state}</T>}
         </Row>
         <Row align="flex-start" justify="space-between" gap={space.md} style={{ marginTop: 4 }}>
           <T v="entry" lines={2} style={{ flex: 1 }}>{card.title}</T>
@@ -227,6 +229,131 @@ export function MarketRow({
           </Tap>
         ) : null}
       </Row>
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------- market state */
+
+export type MarketStateKind = 'available' | 'negotiating' | 'agreed' | 'cleared' | 'expired';
+
+const STATE_LABEL: Record<MarketStateKind, string> = {
+  available: 'Available',
+  negotiating: 'Negotiating',
+  agreed: 'Agreed',
+  cleared: 'Cleared',
+  expired: 'Expired',
+};
+
+/** One treatment for a position's state everywhere: hollow, half, solid, ringed, dashed. */
+export function MarketState({ state, label }: { state: MarketStateKind; label?: string }) {
+  const tone = state === 'negotiating' ? colors.amberText : state === 'agreed' || state === 'cleared' ? colors.forest : colors.inkDim;
+  const mark =
+    state === 'available' ? { borderWidth: 1.5, borderColor: colors.inkFaint } :
+    state === 'negotiating' ? { borderWidth: 1.5, borderColor: colors.amber, overflow: 'hidden' as const } :
+    state === 'agreed' ? { backgroundColor: colors.forest } :
+    state === 'cleared' ? { backgroundColor: colors.forest, borderWidth: 2, borderColor: colors.bg, outlineWidth: 1, outlineColor: colors.forest, outlineStyle: 'solid' as const } :
+    { borderWidth: 1.5, borderColor: colors.inkFaint, borderStyle: 'dashed' as const };
+  return (
+    <Row gap={5} style={{ alignItems: 'center' }}>
+      <View style={[{ width: 10, height: 10, borderRadius: 5 }, mark]}>
+        {state === 'negotiating' ? <View style={{ width: 5, height: 10, backgroundColor: colors.amber }} /> : null}
+      </View>
+      <T v="label" color={tone}>{label ?? STATE_LABEL[state]}</T>
+    </Row>
+  );
+}
+
+/** Compact "price revised" fact — used instead of a chart when there are only one or two revisions. */
+export function PriceRevised({ from, to, at, who = 'Ask' }: { from: number; to: number; at?: string; who?: string }) {
+  if (from === to) return null;
+  return (
+    <Row gap={6}>
+      <T v="small" color={colors.inkDim}>{`${who} revised`}</T>
+      <T v="small" color={colors.inkFaint} style={{ textDecorationLine: 'line-through' }}>{formatMoney(from)}</T>
+      <T v="smallStrong">{formatMoney(to)}</T>
+      {at ? <T v="small" color={colors.inkFaint}>{at}</T> : null}
+    </Row>
+  );
+}
+
+/* ------------------------------------------------------ expanded opportunity */
+
+/**
+ * A row opened in place: the structured card for deciding on one opportunity —
+ * economics, availability, a revised price if there was one, verified evidence,
+ * why it ranks, and the decision.
+ */
+export function OpportunityCard({
+  card,
+  person,
+  categoryLabel,
+  state,
+  stateKind,
+  fitLine,
+  onNegotiate,
+  onAccept,
+  onDetails,
+  onCollapse,
+}: {
+  card: MatchCard;
+  person: Person;
+  categoryLabel: string;
+  state: string;
+  stateKind: MarketStateKind;
+  fitLine?: string;
+  onNegotiate?: () => void;
+  onAccept: () => void;
+  onDetails: () => void;
+  onCollapse: () => void;
+}) {
+  const revision = card.revisions?.[card.revisions.length - 1];
+  const buying = card.kind === 'offer';
+  return (
+    <View testID="opportunity-card" style={{ marginVertical: space.md, marginHorizontal: -8, padding: space.lg, borderRadius: 14, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.rule, gap: space.md }}>
+      <Tap onPress={onCollapse} label={`Collapse ${card.title}`}>
+        <Row justify="space-between">
+          <SideLabel kind={card.kind} detail={categoryLabel} />
+          <MarketState state={stateKind} label={state} />
+        </Row>
+        <T v="title" style={{ marginTop: space.sm }}>{card.title}</T>
+      </Tap>
+      <Row align="flex-end" style={{ borderTopWidth: 1, borderColor: colors.ruleStrong, paddingTop: space.sm }}>
+        <View style={{ flex: 1 }}>
+          <T v="label" color={colors.inkDim}>{buying ? 'Ask' : 'Bid'}</T>
+          <T v="priceLarge">{formatMoney(card.price)}</T>
+          <T v="label" color={colors.inkFaint}>{UNIT_LABEL[card.unit]}</T>
+        </View>
+        <View style={{ flex: 1 }}>
+          <T v="label" color={colors.inkDim}>Timing</T>
+          <T v="bodyStrong">{card.timingNote}</T>
+        </View>
+        {card.capacity ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <T v="label" color={colors.inkDim}>Capacity</T>
+            <T v="bodyStrong">{capacityText(card.capacity).replace(' left', '')}</T>
+          </View>
+        ) : null}
+      </Row>
+      {card.capacity && card.capacity.total > 1 ? <CapacityBar capacity={card.capacity} width={260} /> : null}
+      {revision ? <PriceRevised from={revision.price} to={card.price} at={`since ${revision.at}`} who={buying ? 'Ask' : 'Bid'} /> : null}
+      <T v="body" color={colors.inkDim}>{card.description}</T>
+      <View style={{ borderTopWidth: 1, borderColor: colors.rule, paddingTop: space.sm, gap: 2 }}>
+        <Row justify="space-between">
+          <T v="bodyStrong">{person.name}</T>
+          <T v="small" color={colors.inkDim}>{person.location}</T>
+        </Row>
+        <T v="small" color={colors.inkDim}>{person.bio}</T>
+        <T v="small">{person.completedCount ? `${person.completedCount} verified transactions, ${person.recommendCount} would work with them again${person.trustPaths ? `, ${person.trustPaths} in your network` : ''}` : 'First transaction on DemandOne'}</T>
+      </View>
+      {fitLine ? <T v="small" color={colors.inkDim}>{fitLine}</T> : null}
+      <Row gap={space.sm}>
+        {card.negotiable && onNegotiate ? <Button title="Negotiate terms" onPress={onNegotiate} style={{ flex: 1 }} /> : null}
+        <Button kind={card.negotiable ? 'secondary' : 'primary'} title={`${buying ? 'Accept' : 'Take it at'} ${formatMoney(card.price)}`} onPress={onAccept} style={card.negotiable ? undefined : { flex: 1 }} />
+      </Row>
+      <Tap onPress={onDetails} label="Full details">
+        <T v="smallStrong" color={colors.forest}>Full details</T>
+      </Tap>
     </View>
   );
 }

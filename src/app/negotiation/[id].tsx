@@ -2,17 +2,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { formatMoney, parseMoney } from '@/domain/money';
-import { describeEvent, isTerminal, ISSUE_TEXT, sideOf, suggestOptions, viewFor, type TradeOption } from '@/domain/negotiation';
+import { describeEvent, isTerminal, sideOf, suggestOptions, viewFor, type TradeOption } from '@/domain/negotiation';
 import { computeFees } from '@/domain/pricing';
-import { deadlineLabel, PAYMENT_LABEL, SCOPE_LABEL, UNIT_SHORT, VOLUME_LABEL } from '@/domain/terms';
+import { deadlineLabel, describeChanges, PAYMENT_LABEL, SCOPE_LABEL, sameTerms, UNIT_SHORT, VOLUME_LABEL } from '@/domain/terms';
 import { DEMO_UTTERANCES } from '@/infra/voice';
-import { acceptCounter, holdPosition, ownLimit, proposeTerms, stopNegotiation } from '@/services/negotiation';
+import { acceptCounter, holdPosition, ownLimit, proposeTerms, RESULT_TEXT, stopNegotiation } from '@/services/negotiation';
 import { useAppState, useViewer } from '@/state/hooks';
 import { AmbientField } from '@/ui/Ambient';
-import { Button, Field, Page, Row, Rule, Section, Stack, T, TopBar } from '@/ui/core';
-import { SpreadStrip, StepHistory, TermSheet, type TermRow } from '@/ui/market';
+import { Button, Field, Page, Row, Rule, Section, T, TopBar } from '@/ui/core';
+import { MarketState, SpreadStrip, StepHistory, TermSheet, type TermRow } from '@/ui/market';
 import { VoicePanel } from '@/ui/VoicePanel';
-import { colors, radius, space } from '@/theme';
+import { colors, space } from '@/theme';
 import type { Negotiation, Proposal, Terms } from '@/domain/types';
 
 function termRows(n: Negotiation, mine: Proposal | undefined, theirs: Proposal | undefined): TermRow[] {
@@ -95,7 +95,7 @@ export default function NegotiationScreen() {
     const res = await fn();
     setBusy(null);
     setArmed(null);
-    if (res && 'ok' in res && !res.ok && res.issue) setMessage(ISSUE_TEXT[res.issue as keyof typeof ISSUE_TEXT] ?? 'That didn’t go through.');
+    if (res && 'ok' in res && !res.ok && res.issue) setMessage(RESULT_TEXT[res.issue as keyof typeof RESULT_TEXT] ?? 'That didn’t go through.');
     if (res && 'ok' in res && res.ok && res.bookingId) router.replace({ pathname: '/handled/[id]', params: { id: res.bookingId } });
   };
 
@@ -115,166 +115,202 @@ export default function NegotiationScreen() {
   const shown = asCounterparty ? viewFor(n, view.counterpartyId) : view;
   const buyerHistory = n.proposals.filter((p) => p.by === 'buyer').map((p) => p.terms.price);
   const sellerHistory = n.proposals.filter((p) => p.by === 'seller').map((p) => p.terms.price);
+  const unit = UNIT_SHORT[n.listing.unit];
+  const comparable = !!view.mine && !!view.theirs && sameTerms(view.mine.terms, view.theirs.terms);
+  const theirFirst = n.proposals.find((p) => p.partyId === view.counterpartyId);
+  const theirChanges = view.theirs && theirFirst ? describeChanges(view.theirs.terms, theirFirst.terms) : [];
+  const termDiffs = view.mine && view.theirs ? describeChanges(view.theirs.terms, view.mine.terms) : [];
+  const confirmed = options.find((o) => o.confirmed);
+  const alternatives = options.filter((o) => !o.confirmed);
+  const enoughHistory = n.proposals.length >= 5;
+  const night = { ink: '#F2EDE2', dim: '#BDB6A6', rule: '#3A3B35', bid: '#8FCFB3', ask: '#E6B06C' };
+  const state = n.status === 'cleared' ? 'cleared' : n.status === 'accepted' ? 'agreed' : terminal ? 'expired' : 'negotiating';
 
   return (
     <Page
       backdrop={<AmbientField mood={n.status === 'accepted' || n.status === 'cleared' ? 'handled' : 'negotiating'} height={460} breathe={n.status === 'awaiting_response'} />}
       footer={!terminal ? <VoicePanel variant="dock" context={{ kind: 'negotiation', negotiationId: n.id }} prompts={[DEMO_UTTERANCES.status, DEMO_UTTERANCES.counter]} /> : undefined}>
-      <TopBar onBack={() => router.back()} right={<T v="label" color={colors.inkDim}>{terminal ? n.status === 'cleared' ? 'Cleared' : n.status[0].toUpperCase() + n.status.slice(1) : `Round ${Math.min(n.responses + 1, n.maxRounds)} of ${n.maxRounds}`}</T>} />
-      <T v="label" color={side === 'buyer' ? colors.forest : colors.amberText}>{`${side === 'buyer' ? 'Buying' : 'Selling'}, with ${them?.name ?? 'counterparty'}`}</T>
+      <TopBar onBack={() => router.back()} right={<T v="label" color={colors.inkDim}>{terminal ? '' : `Round ${Math.min(n.responses + 1, n.maxRounds)} of ${n.maxRounds}`}</T>} />
+      <T v="label" color={side === 'buyer' ? colors.forest : colors.amberText}>{`${side === 'buyer' ? 'Buying from' : 'Selling to'} ${them?.name ?? 'counterparty'}`}</T>
       <T v="small" color={colors.inkDim} style={{ marginTop: 2 }}>{n.listing.title}</T>
       <T v="display" style={{ marginTop: space.md }} testID="negotiation-headline">{headline}</T>
       {why ? <T v="body" color={colors.inkDim} style={{ marginTop: space.sm }} testID="negotiation-why">{why}</T> : null}
 
-      {/* Current terms: bid, ask, spread — public numbers only */}
+      {/* 1. Current terms — the active negotiation, as one dark market panel */}
       {view.theirs ? (
-        <View style={{ marginTop: space.xl }}>
+        <View testID="negotiation-card" style={{ marginTop: space.xl, padding: space.lg, borderRadius: 16, backgroundColor: '#1E201D', gap: space.md }}>
+          <Row justify="space-between">
+            <T v="label" color={night.dim}>Current terms</T>
+            <MarketState state={state} />
+          </Row>
           <Row align="flex-end">
             <View style={{ flex: 1 }}>
-              <T v="label" color={colors.inkDim}>{`Your ${myWord}`}</T>
-              <T v="priceLarge" color={colors.forest} testID="my-price">{view.mine ? formatMoney(view.mine.terms.price) : '—'}</T>
+              <T v="label" color={night.dim}>{`Your ${myWord}`}</T>
+              <T v="priceLarge" color={night.bid} testID="my-price">{view.mine ? formatMoney(view.mine.terms.price) : '—'}</T>
             </View>
             <View style={{ flex: 1 }}>
-              <T v="label" color={colors.inkDim}>{`Their ${theirWord}`}</T>
-              <T v="priceLarge" color={colors.amberText} testID="their-price">{formatMoney(view.theirs.terms.price)}</T>
+              <T v="label" color={night.dim}>{`Their ${theirWord}`}</T>
+              <T v="priceLarge" color={night.ask} testID="their-price">{formatMoney(view.theirs.terms.price)}</T>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <T v="label" color={colors.inkDim}>Spread</T>
-              <T v="priceLarge" testID="spread">{view.spread !== undefined ? formatMoney(view.spread) : '—'}</T>
+              <T v="label" color={night.dim}>Gap</T>
+              <T v="priceLarge" color={night.ink} testID="spread">{view.spread !== undefined ? formatMoney(view.spread) : '—'}</T>
             </View>
           </Row>
-          {view.mine ? (
-            <View style={{ marginTop: space.md }}>
-              <SpreadStrip
-                bid={side === 'buyer' ? view.mine.terms.price : view.theirs.terms.price}
-                ask={side === 'buyer' ? view.theirs.terms.price : view.mine.terms.price}
-                openingBid={buyerHistory[0]}
-                openingAsk={sellerHistory[0]}
-              />
-            </View>
+          {comparable && view.mine ? (
+            <SpreadStrip
+              bid={side === 'buyer' ? view.mine.terms.price : view.theirs.terms.price}
+              ask={side === 'buyer' ? view.theirs.terms.price : view.mine.terms.price}
+              openingBid={buyerHistory[0]}
+              openingAsk={sellerHistory[0]}
+            />
+          ) : view.mine ? (
+            <T v="small" color={night.dim}>{`Not like for like: their ${theirWord} includes ${termDiffs.join(', ')}. Compare the terms below, not just the prices.`}</T>
           ) : null}
-          {buyerHistory.length + sellerHistory.length >= 3 ? (
-            <View style={{ marginTop: space.md }}>
-              <StepHistory buyer={buyerHistory} seller={sellerHistory} />
-              <T v="label" color={colors.inkFaint}>Each step is a proposal actually made. Bids in green, asks in amber.</T>
-            </View>
+          {theirFirst && theirFirst.terms.price !== view.theirs.terms.price ? (
+            <Row gap={6} style={{ flexWrap: 'wrap' }}>
+              <T v="small" color={night.dim}>{`${theirWord[0].toUpperCase()}${theirWord.slice(1)} revised`}</T>
+              <T v="small" color={night.dim} style={{ textDecorationLine: 'line-through' }}>{formatMoney(theirFirst.terms.price)}</T>
+              <T v="smallStrong" color={night.ink}>{formatMoney(view.theirs.terms.price)}</T>
+              {theirChanges.length ? <T v="small" color={night.ask}>{`for ${theirChanges.join(', ')}`}</T> : null}
+            </Row>
           ) : null}
+          <View style={{ borderTopWidth: 1, borderColor: night.rule, paddingTop: space.sm, gap: 4 }}>
+            {[
+              ['Delivery', deadlineLabel(view.theirs.terms.deadline, n.listing.timingLabel)],
+              ['Scope', SCOPE_LABEL[view.theirs.terms.scope]],
+              ['Payment', PAYMENT_LABEL[view.theirs.terms.payment]],
+              ...(view.theirs.terms.hours ? [['Hours', `${view.theirs.terms.hours} h, ${formatMoney(view.theirs.terms.price * view.theirs.terms.hours)} total`]] : []),
+            ].map(([k, val]) => (
+              <Row key={k} gap={space.md}>
+                <T v="small" color={night.dim} style={{ width: 72 }}>{k}</T>
+                <T v="small" color={night.ink} style={{ flex: 1 }}>{val}</T>
+              </Row>
+            ))}
+          </View>
         </View>
       ) : null}
 
-      <Section title="Term sheet" right={<Pressable accessibilityRole="switch" accessibilityState={{ checked: asCounterparty }} accessibilityLabel={asCounterparty ? 'View as you' : `View as ${firstName} (demo)`} onPress={() => setAsCounterparty((v) => !v)}><T v="label" color={colors.forest}>{asCounterparty ? 'View as you' : `View as ${firstName} (demo)`}</T></Pressable>}>
+      {/* 2. What separates the parties */}
+      <Section title="What separates you" right={<Pressable accessibilityRole="switch" accessibilityState={{ checked: asCounterparty }} accessibilityLabel={asCounterparty ? 'View as you' : `View as ${firstName} (demo)`} onPress={() => setAsCounterparty((v) => !v)}><T v="label" color={colors.forest}>{asCounterparty ? 'View as you' : `View as ${firstName} (demo)`}</T></Pressable>}>
         <TermSheet rows={termRows(n, shown.mine, shown.theirs)} mineLabel={asCounterparty ? firstName : 'You'} theirsLabel={asCounterparty ? 'You' : firstName} />
         <T v="small" color={colors.inkFaint} style={{ marginTop: space.sm }}>
           {asCounterparty
             ? `Demo: the same shared record from ${firstName}'s side. Neither side sees the other's private limit.`
             : limit !== undefined
-              ? `Your private ${side === 'buyer' ? 'maximum' : 'minimum'}: ${formatMoney(limit)}. Only you see this.`
-              : 'Rows that still differ are shaded.'}
+              ? `Shaded rows still differ. Your private ${side === 'buyer' ? 'maximum' : 'minimum'}: ${formatMoney(limit)}${unit} — only you see this.`
+              : 'Shaded rows still differ.'}
         </T>
       </Section>
 
-      {/* Outcomes */}
-      {(n.status === 'accepted' || n.status === 'cleared') && n.bookingId ? (
-        <Button title="Open the transaction" onPress={() => router.push({ pathname: '/handled/[id]', params: { id: n.bookingId! } })} style={{ marginTop: space.xl }} />
-      ) : null}
-      {(n.status === 'rejected' || n.status === 'expired' || n.status === 'withdrawn') ? (
-        <Button kind="secondary" title="Find another counterparty" onPress={() => router.push({ pathname: '/discover', params: { category: n.listing.category } })} style={{ marginTop: space.xl }} />
-      ) : null}
-
+      {/* 3. What could change */}
       {n.status === 'countered' ? (
-        <Section title="What could clear it" note="Confirmed terms can be approved now. Your agent’s proposals still need their answer." ruled>
-          <Stack gap={space.sm} style={{ marginTop: space.sm }}>
-            {options.map((o) => {
-              const fees = computeFees(o.terms.price);
-              if (!o.confirmed) {
-                const label = o.changes.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ') || 'Meet in the middle';
-                return (
-                  <View key={o.id} testID="option-proposal" style={{ paddingVertical: space.md, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.inkFaint }}>
-                    <Row justify="space-between" align="flex-start" gap={space.md}>
-                      <View style={{ flex: 1 }}>
-                        <T v="bodyStrong">{label}</T>
-                        <T v="small" color={!o.withinLimit ? colors.rust : colors.inkDim}>{!o.withinLimit ? `Past your private ${side === 'buyer' ? 'maximum' : 'minimum'}; proposing raises it.` : `Your agent’s proposal. ${firstName} hasn’t seen it.`}</T>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                        <T v="price">{`${formatMoney(o.terms.price)}${UNIT_SHORT[n.listing.unit]}`}</T>
-                        <Button size="sm" kind="quiet" title={armed === o.id ? 'Tap again' : 'Propose'} label={`Propose ${formatMoney(o.terms.price)} with ${label.toLowerCase()}`} loading={busy === o.id} onPress={() => propose(o)} />
-                      </View>
-                    </Row>
+        <Section title="What could change" note={`Your agent’s proposals — ${firstName} hasn’t seen them. Proposing one sends it.`} ruled>
+          {alternatives.map((o) => {
+            const label = o.changes.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ') || 'Meet in the middle';
+            const delta = view.theirs ? o.terms.price - view.theirs.terms.price : 0;
+            return (
+              <View key={o.id} testID="option-proposal" style={{ paddingVertical: space.md, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.inkFaint }}>
+                <Row justify="space-between" align="flex-start" gap={space.md}>
+                  <View style={{ flex: 1 }}>
+                    <T v="bodyStrong">{label}</T>
+                    <T v="small" color={!o.withinLimit ? colors.rust : colors.inkDim}>
+                      {!o.withinLimit ? `Past your private ${side === 'buyer' ? 'maximum' : 'minimum'}; proposing raises it.` : `${delta < 0 ? '−' : '+'}${formatMoney(Math.abs(delta))} against their ${theirWord}`}
+                    </T>
                   </View>
-                );
-              }
-              return (
-                <View key={o.id} testID={o.confirmed ? 'option-confirmed' : 'option-proposal'} style={{ padding: space.md, borderRadius: radius.control, borderWidth: 1, borderStyle: o.confirmed ? 'solid' : 'dashed', borderColor: o.confirmed ? colors.forest : colors.inkFaint, backgroundColor: o.confirmed ? colors.raised : 'transparent', gap: 6 }}>
-                  <Row justify="space-between" align="flex-start">
-                    <T v="bodyStrong" style={{ flex: 1 }}>{o.confirmed ? 'Their terms as they stand' : o.changes.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ') || 'Meet in the middle'}</T>
-                    <T v="price">{`${formatMoney(o.terms.price)}${UNIT_SHORT[n.listing.unit]}`}</T>
-                  </Row>
-                  <T v="small" color={o.confirmed ? colors.forest : colors.inkDim}>{o.confirmed ? `Confirmed by ${firstName}.` : `Your agent’s proposal. ${firstName} hasn’t seen it.`}</T>
-                  {o.confirmed ? (
-                    <View style={{ borderTopWidth: 1, borderColor: colors.rule, paddingTop: 6, gap: 2 }}>
-                      <Row justify="space-between"><T v="small" color={colors.inkDim}>Agreed price</T><T v="small">{formatMoney(o.terms.price)}</T></Row>
-                      {side === 'buyer' ? (
-                        <>
-                          <Row justify="space-between"><T v="small" color={colors.inkDim}>DemandOne fee, 5%</T><T v="small">{formatMoney(fees.buyerFee)}</T></Row>
-                          <Row justify="space-between"><T v="smallStrong">You authorize (demo payment)</T><T v="smallStrong">{formatMoney(fees.buyerTotal)}</T></Row>
-                        </>
-                      ) : (
-                        <>
-                          <Row justify="space-between"><T v="small" color={colors.inkDim}>DemandOne fee, 10%</T><T v="small">{`−${formatMoney(fees.sellerFee)}`}</T></Row>
-                          <Row justify="space-between"><T v="smallStrong">You receive</T><T v="smallStrong">{formatMoney(fees.sellerNet)}</T></Row>
-                        </>
-                      )}
-                    </View>
-                  ) : null}
-                  {!o.withinLimit ? <T v="small" color={colors.rust}>{`Past your private ${side === 'buyer' ? 'maximum' : 'minimum'}. ${o.confirmed ? 'Approving' : 'Proposing'} it raises your limit.`}</T> : null}
-                  <Button
-                    size="sm"
-                    kind={o.confirmed ? 'primary' : 'secondary'}
-                    title={o.confirmed ? (armed === o.id || o.withinLimit ? `Approve ${formatMoney(o.terms.price)}` : 'Approve past my limit') : armed === o.id ? 'Tap again to propose past my limit' : `Propose ${formatMoney(o.terms.price)}`}
-                    loading={busy === o.id}
-                    onPress={() => (o.confirmed ? (!o.withinLimit && armed !== o.id ? setArmed(o.id) : void run(o.id, () => acceptCounter(n.id))) : propose(o))}
-                  />
-                </View>
-              );
-            })}
-          </Stack>
-
-          <Row gap={space.sm} align="flex-end" style={{ marginTop: space.lg }}>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <T v="price">{`${formatMoney(o.terms.price)}${unit}`}</T>
+                    <Button size="sm" kind="quiet" title={armed === o.id ? 'Tap again' : 'Propose'} label={`Propose ${formatMoney(o.terms.price)} with ${label.toLowerCase()}`} loading={busy === o.id} onPress={() => propose(o)} />
+                  </View>
+                </Row>
+              </View>
+            );
+          })}
+          <Row gap={space.sm} align="flex-end" style={{ marginTop: space.md }}>
             <View style={{ flex: 1 }}>
               <Field label={`Or your own ${myWord} on their terms`} prefix="£" value={custom} onChangeText={setCustom} keyboardType="number-pad" />
             </View>
             <Button size="sm" kind="secondary" title={armed === 'custom' ? 'Past my limit — propose' : 'Propose'} onPress={proposeCustom} loading={busy === 'custom'} />
           </Row>
-
           {message ? <T v="small" color={colors.rust} style={{ marginTop: space.md }} testID="negotiation-message">{message}</T> : null}
+        </Section>
+      ) : null}
 
-          <Row gap={space.lg} style={{ marginTop: space.lg, flexWrap: 'wrap' }}>
+      {/* 4. Your decision */}
+      {n.status === 'countered' && confirmed ? (
+        <Section title="Your decision">
+          <View testID="option-confirmed" style={{ marginTop: space.sm, padding: space.lg, borderRadius: 14, borderWidth: 1.5, borderColor: colors.forest, backgroundColor: colors.raised, gap: 8 }}>
+            <Row justify="space-between" align="flex-start">
+              <T v="bodyStrong" style={{ flex: 1 }}>{`Approve ${firstName}’s ${view.theirs?.source === 'listing' ? theirWord : 'counteroffer'}`}</T>
+              <T v="price">{`${formatMoney(confirmed.terms.price)}${unit}`}</T>
+            </Row>
+            <T v="small" color={colors.forest}>{`Confirmed by ${firstName}. Approving agrees the deal.`}</T>
+            {(() => {
+              const total = confirmed.terms.hours ? confirmed.terms.price * confirmed.terms.hours : confirmed.terms.price;
+              const fees = computeFees(total);
+              return (
+                <View style={{ borderTopWidth: 1, borderColor: colors.rule, paddingTop: 6, gap: 2 }}>
+                  {confirmed.terms.hours ? <Row justify="space-between"><T v="small" color={colors.inkDim}>{`${confirmed.terms.hours} h at ${formatMoney(confirmed.terms.price)}/hr`}</T><T v="small">{formatMoney(total)}</T></Row> : null}
+                  {side === 'buyer' ? (
+                    <>
+                      <Row justify="space-between"><T v="small" color={colors.inkDim}>DemandOne fee, 5%</T><T v="small">{formatMoney(fees.buyerFee)}</T></Row>
+                      <Row justify="space-between"><T v="smallStrong">You authorize (demo payment)</T><T v="smallStrong">{formatMoney(fees.buyerTotal)}</T></Row>
+                    </>
+                  ) : (
+                    <>
+                      <Row justify="space-between"><T v="small" color={colors.inkDim}>DemandOne fee, 10%</T><T v="small">{`−${formatMoney(fees.sellerFee)}`}</T></Row>
+                      <Row justify="space-between"><T v="smallStrong">You receive</T><T v="smallStrong">{formatMoney(fees.sellerNet)}</T></Row>
+                    </>
+                  )}
+                </View>
+              );
+            })()}
+            {!confirmed.withinLimit ? <T v="small" color={colors.rust}>{`Past your private ${side === 'buyer' ? 'maximum' : 'minimum'}. Approving it raises your limit.`}</T> : null}
+            <Button
+              title={armed === confirmed.id || confirmed.withinLimit ? `Approve ${formatMoney(confirmed.terms.price)}` : 'Approve past my limit'}
+              loading={busy === confirmed.id}
+              onPress={() => (!confirmed.withinLimit && armed !== confirmed.id ? setArmed(confirmed.id) : void run(confirmed.id, () => acceptCounter(n.id)))}
+            />
+          </View>
+          <Row gap={space.lg} style={{ marginTop: space.md, flexWrap: 'wrap' }}>
             <Button kind="quiet" title={view.mine ? `Hold at ${formatMoney(view.mine.terms.price)}` : 'Hold'} onPress={() => run('hold', () => holdPosition(n.id))} loading={busy === 'hold'} />
-            <Button kind="quiet" title="Other counterparties" onPress={() => router.push({ pathname: '/discover', params: { category: n.listing.category } })} />
+            <Button kind="quiet" title={side === 'buyer' ? 'Other sellers' : 'Other buyers'} onPress={() => router.push({ pathname: '/discover', params: { category: n.listing.category } })} />
             <Button kind="danger" title={armed === 'stop' ? 'Tap again to stop' : 'Stop'} onPress={() => (armed === 'stop' ? void run('stop', () => stopNegotiation(n.id)) : setArmed('stop'))} loading={busy === 'stop'} />
           </Row>
         </Section>
       ) : null}
 
       {n.status === 'awaiting_response' ? <T v="small" color={colors.inkDim} style={{ marginTop: space.xl }}>{`Waiting for ${firstName}’s response…`}</T> : null}
+      {(n.status === 'accepted' || n.status === 'cleared') && n.bookingId ? <Button title="Open the transaction" onPress={() => router.push({ pathname: '/handled/[id]', params: { id: n.bookingId! } })} style={{ marginTop: space.xl }} /> : null}
+      {n.status === 'accepted' && !n.bookingId ? <T v="body" color={colors.inkDim} style={{ marginTop: space.xl }}>Agreed in principle. Approve it with the rest of your allocation.</T> : null}
+      {n.status === 'rejected' || n.status === 'expired' || n.status === 'withdrawn' ? <Button kind="secondary" title="Find another counterparty" onPress={() => router.push({ pathname: '/discover', params: { category: n.listing.category } })} style={{ marginTop: space.xl }} /> : null}
 
+      {/* 5. History, on request */}
       <View style={{ marginTop: space.xxl, marginBottom: space.lg }}>
         <Rule />
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLog }} accessibilityLabel="Activity log" onPress={() => setShowLog((v) => !v)} style={{ paddingVertical: space.md }}>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLog }} accessibilityLabel="Price movement and negotiation history" onPress={() => setShowLog((v) => !v)} style={{ paddingVertical: space.md }}>
           <Row justify="space-between">
-            <T v="bodyStrong">What your agent has done</T>
-            <T v="small" color={colors.inkDim}>{showLog ? 'Hide' : `${n.events.length} entries`}</T>
+            <T v="bodyStrong">Price movement & negotiation history</T>
+            <T v="small" color={colors.inkDim}>{showLog ? 'Hide' : `${n.proposals.length} proposals`}</T>
           </Row>
         </Pressable>
-        {showLog
-          ? n.events.map((e) => (
-              <Row key={e.id} align="flex-start" gap={space.md} style={{ paddingVertical: 6 }}>
+        {showLog ? (
+          <View style={{ gap: space.sm }}>
+            {enoughHistory ? (
+              <View>
+                <StepHistory buyer={buyerHistory} seller={sellerHistory} />
+                <T v="label" color={colors.inkFaint}>Each step is a proposal actually made. Steps where terms changed are noted below.</T>
+              </View>
+            ) : null}
+            {n.events.map((e) => (
+              <Row key={e.id} align="flex-start" gap={space.md} style={{ paddingVertical: 4 }}>
                 <T v="label" color={colors.inkFaint} style={{ width: 44 }}>{new Date(e.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</T>
                 <T v="small" style={{ flex: 1 }}>{describeEvent(e, viewer.id, nameOf)}</T>
                 {e.proposalId ? <T v="label" color={colors.inkFaint}>{e.proposalId}</T> : null}
               </Row>
-            ))
-          : null}
+            ))}
+          </View>
+        ) : null}
       </View>
     </Page>
   );

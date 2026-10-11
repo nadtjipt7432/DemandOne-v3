@@ -43,4 +43,17 @@ export const MIGRATIONS: Record<number, (state: unknown) => unknown> = {
       people,
     };
   },
+  /**
+   * v2 → v3: capacity allocation. New demo counterparties are added (existing
+   * people, including the signed-in person, are kept as they are) and every
+   * transaction gets its explicit total.
+   */
+  2: (raw) => {
+    const s = raw as AnyState;
+    return {
+      ...s,
+      people: { ...seedPeople, ...(s.people ?? {}) },
+      bookings: (s.bookings ?? []).map((b: AnyState) => ({ total: b.terms?.hours ? b.terms.price * b.terms.hours : b.terms?.price ?? 0, ...b })),
+    };
+  },
 };

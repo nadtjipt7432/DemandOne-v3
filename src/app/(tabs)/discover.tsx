@@ -6,7 +6,8 @@ import { isTerminal } from '@/domain/negotiation';
 import { useAppState, useViewer } from '@/state/hooks';
 import { AmbientField } from '@/ui/Ambient';
 import { Page, Row, T, Tabs, Tap } from '@/ui/core';
-import { MarketRow } from '@/ui/market';
+import { MarketRow, OpportunityCard, type MarketStateKind } from '@/ui/market';
+import { acceptListing } from '@/services/negotiation';
 import { colors, space } from '@/theme';
 import type { MatchCard } from '@/domain/types';
 
@@ -30,6 +31,7 @@ export default function Exchange() {
   const viewer = useViewer();
   const [side, setSide] = useState<Side>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(category);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const live = useMemo(() => {
     const map = new Map<string, string>();
@@ -51,13 +53,18 @@ export default function Exchange() {
   }, [visible, side, categoryFilter, viewer, s.people, s.cards, live]);
 
   const labelOf = (id: string) => s.categories.find((c) => c.id === id)?.label ?? id;
-  const stateOf = (c: MatchCard): { text: string; live: boolean } => {
+  const stateOf = (c: MatchCard): { text: string; live: boolean; kind: MarketStateKind } => {
     const l = live.get(c.id);
-    if (l) return { text: l, live: true };
-    if (c.marketEvent) return { text: c.marketEvent, live: true };
-    if (c.revisions?.length) return { text: 'Ask revised', live: true };
-    if (!c.negotiable) return { text: 'Fixed price', live: false };
-    return { text: 'Open', live: false };
+    if (l) return { text: l, live: true, kind: 'negotiating' };
+    if (c.marketEvent) return { text: c.marketEvent, live: true, kind: 'available' };
+    if (c.revisions?.length) return { text: 'Price revised', live: true, kind: 'available' };
+    if (!c.negotiable) return { text: 'Fixed price', live: false, kind: 'available' };
+    return { text: 'Available', live: false, kind: 'available' };
+  };
+
+  const accept = async (c: MatchCard) => {
+    const res = await acceptListing(c.id);
+    if (res.ok && res.bookingId) router.push({ pathname: '/handled/[id]', params: { id: res.bookingId } });
   };
 
   return (
@@ -92,6 +99,23 @@ export default function Exchange() {
         ) : (
           ranked.map((c) => {
             const st = stateOf(c);
+            if (expanded === c.id) {
+              return (
+                <OpportunityCard
+                  key={c.id}
+                  card={c}
+                  person={s.people[c.personId]}
+                  categoryLabel={labelOf(c.category)}
+                  state={st.text}
+                  stateKind={st.kind}
+                  fitLine={`Why it ranks for you: ${computeFit(c, viewer, s.people[c.personId]).explanation[0] ?? ''}`}
+                  onNegotiate={() => router.push({ pathname: '/listing/[id]', params: { id: c.id, act: 'negotiate' } })}
+                  onAccept={() => accept(c)}
+                  onDetails={() => router.push({ pathname: '/listing/[id]', params: { id: c.id } })}
+                  onCollapse={() => setExpanded(null)}
+                />
+              );
+            }
             return (
               <MarketRow
                 key={c.id}
@@ -100,8 +124,9 @@ export default function Exchange() {
                 categoryLabel={labelOf(c.category)}
                 state={st.text}
                 stateTone={st.live ? 'live' : 'quiet'}
+                stateKind={st.kind}
                 forYou={matchesCapability(c, viewer)}
-                onOpen={() => router.push({ pathname: '/listing/[id]', params: { id: c.id } })}
+                onOpen={() => setExpanded(c.id)}
                 onAction={() => router.push({ pathname: '/listing/[id]', params: { id: c.id, act: 'negotiate' } })}
               />
             );

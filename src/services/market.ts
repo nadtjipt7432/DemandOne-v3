@@ -24,6 +24,8 @@ export interface PositionInput {
   floorPrice?: number;
   timing?: TimingSpec;
   capacityHours?: number;
+  /** How many weeks the released hours span (split evenly). Defaults to one. */
+  weeks?: number;
   locationMode?: LocationMode;
   priorities?: Criterion[];
 }
@@ -58,11 +60,18 @@ export async function createPosition(input: PositionInput): Promise<string> {
       price: input.price,
       floorPrice: input.floorPrice ?? roundTo(input.price * 0.85, priceStep(input.price), 'up'),
       capacityHours: input.capacityHours,
+      // Released hours spanning several weeks are split evenly across them.
+      weeklyHours: input.capacityHours ? splitWeeks(input.capacityHours, Math.max(1, input.weeks ?? 1)) : undefined,
     };
     const withOffer = updateViewer(s, (v) => ({ ...v, offers: [offer, ...v.offers] }));
     return inboundBidsFor(withOffer, offer);
   });
   return newId;
+}
+
+function splitWeeks(hours: number, weeks: number): number[] {
+  const base = Math.floor(hours / weeks);
+  return Array.from({ length: weeks }, (_, i) => base + (i < hours % weeks ? 1 : 0));
 }
 
 /** Standing demand: keep watching until the market lines up. */
@@ -80,7 +89,16 @@ export async function keepWatching(mode: 'need' | 'offer', targetId: string): Pr
 /** Adjust the hours released on one of the viewer's offers. */
 export async function setOfferCapacity(offerId: string, hours: number): Promise<void> {
   await delay(200);
-  setState((s) => updateViewer(s, (v) => ({ ...v, offers: v.offers.map((o) => (o.id === offerId ? { ...o, capacityHours: Math.max(0, Math.round(hours)) } : o)) })));
+  setState((s) =>
+    updateViewer(s, (v) => ({
+      ...v,
+      offers: v.offers.map((o) => {
+        if (o.id !== offerId) return o;
+        const total = Math.max(0, Math.round(hours));
+        return { ...o, capacityHours: total, weeklyHours: o.weeklyHours ? splitWeeks(total, o.weeklyHours.length) : undefined };
+      }),
+    }))
+  );
 }
 
 /** Hide a listing from the viewer's Exchange. */

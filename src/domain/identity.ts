@@ -145,15 +145,16 @@ const PUBLIC_ROUTES = ['/', '/login'];
 
 /**
  * The route guard's decision: undefined when `pathname` is allowed, otherwise
- * where to send the user. Signed out → only the public routes. Mid-onboarding →
- * only the current step. Onboarded → anywhere except the public routes and the
- * capability step (capability is edited from Account after onboarding; the values
- * screen stays reachable so it can be redone from You).
+ * where to send the user. The landing page is always reachable — it's the front
+ * door, and offers "Continue" to a signed-in user. Signed out → only landing and
+ * login. Mid-onboarding → the current step. Onboarded → anywhere except login and
+ * the capability step (capability is edited from Profile after onboarding).
  */
 export function guardRedirect(pathname: string, account: DeviceAccount | null, signedIn: boolean): string | undefined {
   const home = homeRouteFor(account, signedIn);
+  if (pathname === '/') return undefined;
   if (!account || !signedIn) return PUBLIC_ROUTES.includes(pathname) ? undefined : home;
   if (account.onboarding !== 'done') return pathname === home ? undefined : home;
-  if (PUBLIC_ROUTES.includes(pathname) || pathname === '/capability') return home;
+  if (pathname === '/login' || pathname === '/capability') return home;
   return undefined;
 }

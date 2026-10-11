@@ -1,10 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { button, shot, signUp, tab } from './helpers';
-
-async function openListing(page: Page, title: RegExp) {
-  await tab(page, 'Exchange');
-  await page.getByRole('button', { name: title }).first().click();
-}
+import { button, openListing, shot, signUp } from './helpers';
 
 async function authorize(page: Page, max: string, opening: string) {
   await button(page, 'Negotiate terms').click();

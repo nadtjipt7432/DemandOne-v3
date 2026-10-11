@@ -3,10 +3,9 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { computeFit, findScheduleConflict } from '@/domain/matching';
-import { ISSUE_TEXT } from '@/domain/negotiation';
 import { deadlineLabel, PAYMENT_LABEL, SCOPE_LABEL, UNIT_LABEL, VOLUME_LABEL } from '@/domain/terms';
 import { passCard } from '@/services/market';
-import { acceptListing, activeNegotiationForCard, defaultOwnLimit, startNegotiation, suggestedOpening } from '@/services/negotiation';
+import { acceptListing, activeNegotiationForCard, defaultOwnLimit, RESULT_TEXT, startNegotiation, suggestedOpening } from '@/services/negotiation';
 import { useAppState, useViewer } from '@/state/hooks';
 import { Button, Choice, Field, KeyValue, Page, Row, Rule, Section, Stack, T, TopBar } from '@/ui/core';
 import { CapacityBar, capacityText, evidenceLine, Price, SideLabel } from '@/ui/market';
@@ -61,7 +60,7 @@ export default function Listing() {
     setBusy('start');
     const res = await startNegotiation(card.id, { price: openingNum, deadline, scope, payment, volume }, limitNum);
     setBusy(null);
-    if (!res.ok) return setError(res.issue === 'not-negotiable' ? 'This is a fixed-price listing.' : res.issue === 'not-found' ? 'This position has left the market.' : ISSUE_TEXT[res.issue]);
+    if (!res.ok) return setError(RESULT_TEXT[res.issue]);
     router.replace(res.bookingId ? { pathname: '/handled/[id]', params: { id: res.bookingId } } : { pathname: '/negotiation/[id]', params: { id: res.negotiationId } });
   };
 

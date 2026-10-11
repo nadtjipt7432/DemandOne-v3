@@ -84,12 +84,13 @@ describe('routing', () => {
     expect(guardRedirect('/capability', account('capability'), true)).toBeUndefined();
     expect(guardRedirect('/today', account('capability'), true)).toBe('/capability');
     expect(guardRedirect('/login', account('values'), true)).toBe('/onboarding');
+    expect(guardRedirect('/', account('values'), true)).toBeUndefined();
   });
 
   it('lets onboarded users into the app but not back to signup screens', () => {
     expect(guardRedirect('/today', account('done'), true)).toBeUndefined();
     expect(guardRedirect('/onboarding', account('done'), true)).toBeUndefined();
-    expect(guardRedirect('/', account('done'), true)).toBe('/today');
+    expect(guardRedirect('/', account('done'), true)).toBeUndefined();
     expect(guardRedirect('/login', account('done'), true)).toBe('/today');
     expect(guardRedirect('/capability', account('done'), true)).toBe('/today');
   });

@@ -59,7 +59,8 @@ export default function Handled() {
   const myFeedback = viewerFeedback(booking, viewer.id);
   const stepIndex = booking.status === 'complete' ? (myFeedback === undefined ? 4 : 5) : STEPS.findIndex((x) => x.status === booking.status);
   const related = getAdjacentListings(s, booking, viewer.id);
-  const movement = role === 'buyer' ? booking.openingPrice - price : price - booking.openingPrice;
+  const opening = role === 'buyer' ? booking.openingPrice : booking.openingBid ?? booking.openingPrice;
+  const movement = role === 'buyer' ? opening - price : price - opening;
   const hasCard = s.paymentMethods.some((p) => p.id === s.defaultPaymentId);
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -157,7 +158,7 @@ export default function Handled() {
         {error ? <T v="small" color={colors.rust} style={{ marginTop: space.sm }}>{error}</T> : null}
       </Section>
 
-      <Section title="Agreed terms" ruled>
+      <Section title="Agreed terms" ruled style={{ marginTop: space.xl, padding: space.lg, borderRadius: 14, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.rule }}>
         <KeyValue label="Price" value={`${formatMoney(price)}${unit}`} />
         <Rule />
         <KeyValue label="Delivery" value={booking.deliveryLabel} />
@@ -167,13 +168,25 @@ export default function Handled() {
         <KeyValue label="Payment" value={PAYMENT_LABEL[booking.terms.payment]} />
         <Rule />
         <KeyValue label="Volume" value={VOLUME_LABEL[booking.terms.volume]} />
+        {booking.terms.hours ? (
+          <>
+            <Rule />
+            <KeyValue label="Hours" value={`${booking.terms.hours} h`} />
+          </>
+        ) : null}
       </Section>
 
-      <Section title="The money" ruled>
-        <KeyValue label={role === 'buyer' ? 'Initial ask' : 'Initial bid'} value={formatMoney(booking.openingPrice)} />
+      <Section title="The money" ruled style={{ marginTop: space.xl, padding: space.lg, borderRadius: 14, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.rule }}>
+        <KeyValue label={role === 'buyer' ? 'Initial ask' : 'Initial bid'} value={`${formatMoney(opening)}${unit}`} />
         <Rule />
-        <KeyValue label="Agreed price" value={formatMoney(price)} />
-        {movement > 0 ? <T v="small" color={colors.forest} style={{ paddingBottom: space.sm }}>{`${formatMoney(movement)} ${role === 'buyer' ? 'below the initial ask' : 'above the initial bid'}.`}</T> : null}
+        <KeyValue label="Agreed price" value={`${formatMoney(price)}${unit}`} />
+        {booking.terms.hours ? (
+          <>
+            <Rule />
+            <KeyValue label={`Total, ${booking.terms.hours} h`} value={formatMoney(booking.total)} />
+          </>
+        ) : null}
+        {movement > 0 ? <T v="small" color={colors.forest} style={{ paddingBottom: space.sm }}>{`${formatMoney(movement)}${unit} ${role === 'buyer' ? 'below the initial ask' : 'above the initial bid'}.`}</T> : null}
         <Rule />
         {role === 'buyer' ? (
           <>

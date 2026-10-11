@@ -1,4 +1,5 @@
 import { delay, nowIso } from '@/infra/clock';
+import { capacityOf, fits } from '@/domain/allocation';
 import { computeFit, passesHardConstraints } from '@/domain/matching';
 import {
   acceptStanding,
@@ -12,10 +13,12 @@ import {
   submitProposal,
   validateProposal,
   withdraw,
+  ISSUE_TEXT,
   type EngineCtx,
   type ProposalIssue,
 } from '@/domain/negotiation';
 import { LISTED_TERMS, roundTo, priceStep } from '@/domain/terms';
+import { capacityDemand, REFERENCE_ASK, type DemandBid } from '@/infra/seed';
 import { getState, id, setState } from '@/state/store';
 import { createBookingFor } from './transactions';
 import { viewerOf } from './viewer';
@@ -33,7 +36,24 @@ function ctx(): EngineCtx {
   return { now: nowIso(), newId: id };
 }
 
-export type NegotiationResult = { ok: true; negotiationId: string; bookingId?: string } | { ok: false; issue: ProposalIssue | 'not-negotiable' | 'not-found' };
+export type NegotiationResult = { ok: true; negotiationId: string; bookingId?: string } | { ok: false; issue: ProposalIssue | 'not-negotiable' | 'not-found' | 'over-capacity' };
+
+/** Plain-language text for every negotiation result a screen may show. */
+export const RESULT_TEXT: Record<Exclude<NegotiationResult, { ok: true }>['issue'], string> = {
+  ...ISSUE_TEXT,
+  'not-negotiable': 'This is a fixed-price listing.',
+  'not-found': 'This position has left the market.',
+  'over-capacity': 'That would double-book you: there aren’t enough free hours left in that week.',
+};
+
+/** Would agreeing this bid exceed the free hours in its week? Bids already reserved by a plan count as theirs. */
+export function exceedsCapacity(s: AppState, n: Negotiation): boolean {
+  if (!n.listing.offerId || !n.request) return false;
+  const offer = s.people[n.sellerId]?.offers.find((o) => o.id === n.listing.offerId);
+  if (!offer) return false;
+  const inPlan = new Set(offer.allocation && offer.allocation.status !== 'committed' ? offer.allocation.negotiationIds : []);
+  return !fits(capacityOf(s, offer), [n], inPlan);
+}
 
 function putNegotiation(s: AppState, n: Negotiation): AppState {
   return { ...s, negotiations: { ...s.negotiations, [n.id]: n } };
@@ -212,6 +232,7 @@ export async function acceptCounter(negotiationId: string): Promise<NegotiationR
   if (!n) return { ok: false, issue: 'not-found' };
   if (isTerminal(n)) return { ok: false, issue: 'closed' };
   if (n.status === 'awaiting_response') return { ok: false, issue: 'pending' };
+  if (exceedsCapacity(s, n)) return { ok: false, issue: 'over-capacity' };
   let bookingId = '';
   setState((st) => {
     const viewerId = viewerOf(st).id;
@@ -242,40 +263,47 @@ export async function stopNegotiation(negotiationId: string): Promise<void> {
 /* ------------------------------------------------------------ inbound bids */
 
 /**
- * Counterparties respond to a newly released Offer: buyers with matching open
- * needs bid on it. Two bids are shaped differently on purpose — one recurring
- * (more total, less flexibility), one single engagement at a higher rate — so the
- * comparison is a real choice.
+ * Buyers respond to newly released capacity. Where the category has live
+ * demand (see infra/seed.ts `capacityDemand`), each buyer bids for a specific
+ * engagement — hours, week, scope — at a rate scaled to the seller's ask, with a
+ * private maximum only the engine reads. Elsewhere, buyers with matching open
+ * needs bid for a share of the hours.
  */
 export function inboundBidsFor(s: AppState, offer: Offer): AppState {
   const viewer = viewerOf(s);
-  const buyers = s.cards.filter((c) => c.kind === 'need' && c.category === offer.category && !s.passedCardIds.includes(c.id)).slice(0, 2);
+  const weekCount = offer.weeklyHours?.length || 1;
+  const scale = offer.price / REFERENCE_ASK;
+  const pool: DemandBid[] =
+    offer.unit === 'hour' && capacityDemand[offer.category]
+      ? capacityDemand[offer.category]
+      : s.cards
+          .filter((c) => c.kind === 'need' && c.category === offer.category && !s.passedCardIds.includes(c.id))
+          .slice(0, 2)
+          .map((c, i) => ({ buyerId: c.personId, summary: c.title, hours: Math.max(2, Math.round((offer.capacityHours ?? 8) / 3)), week: 0, complexity: 'standard' as const, rate: i === 0 ? 132 : 142, limit: 156 }));
   let out = s;
-  buyers.forEach((buyerCard, i) => {
-    const step = priceStep(offer.price);
-    const opening: Terms =
-      i === 0
-        ? { ...LISTED_TERMS, volume: 'recurring', price: roundTo(offer.price * 0.88, step, 'down') }
-        : { ...LISTED_TERMS, price: roundTo(offer.price * 0.95, step, 'down') };
+  for (const d of pool) {
+    const rate = Math.round(d.rate * scale);
+    const hours = offer.unit === 'hour' ? d.hours : undefined;
     const n = createNegotiation(
       {
         listing: { kind: 'offer', ownerId: viewer.id, title: offer.title, category: offer.category, unit: offer.unit, timingLabel: offer.window.label, offerId: offer.id },
-        buyerId: buyerCard.personId,
+        buyerId: d.buyerId,
         sellerId: viewer.id,
-        initiatorId: buyerCard.personId,
-        listingTerms: { price: offer.price, ...LISTED_TERMS },
-        openingFromInitiator: opening,
+        initiatorId: d.buyerId,
+        listingTerms: { price: offer.price, ...LISTED_TERMS, hours },
+        openingFromInitiator: { ...LISTED_TERMS, price: offer.unit === 'hour' ? rate : roundTo(offer.price * (rate / REFERENCE_ASK), priceStep(offer.price), 'down'), hours },
       },
       ctx()
     );
+    const withRequest: Negotiation = { ...n, request: { summary: d.summary, hours: d.hours, week: Math.min(d.week, weekCount - 1), complexity: d.complexity } };
     out = {
-      ...putNegotiation(out, n),
+      ...putNegotiation(out, withRequest),
       privateLimits: {
         ...out.privateLimits,
-        [n.id]: { [buyerCard.personId]: roundTo(offer.price * 1.04, step, 'down'), [viewer.id]: offer.floorPrice ?? roundTo(offer.price * 0.85, step, 'up') },
+        [n.id]: { [d.buyerId]: Math.round(d.limit * scale), [viewer.id]: offer.floorPrice ?? roundTo(offer.price * 0.85, priceStep(offer.price), 'up') },
       },
     };
-  });
+  }
   return out;
 }
 

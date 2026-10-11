@@ -105,8 +105,8 @@ export function Rule({ strong = false, dashed = false, style }: { strong?: boole
   );
 }
 
-export function Row({ children, gap = space.sm, style, align = 'center', justify }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle>; align?: ViewStyle['alignItems']; justify?: ViewStyle['justifyContent'] }) {
-  return <View style={[{ flexDirection: 'row', alignItems: align, gap, justifyContent: justify }, style]}>{children}</View>;
+export function Row({ children, gap = space.sm, style, align = 'center', justify, testID }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle>; align?: ViewStyle['alignItems']; justify?: ViewStyle['justifyContent']; testID?: string }) {
+  return <View testID={testID} style={[{ flexDirection: 'row', alignItems: align, gap, justifyContent: justify }, style]}>{children}</View>;
 }
 
 export function Stack({ children, gap = space.sm, style }: { children: ReactNode; gap?: number; style?: StyleProp<ViewStyle> }) {

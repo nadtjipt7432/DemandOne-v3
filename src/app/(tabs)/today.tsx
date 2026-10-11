@@ -34,9 +34,9 @@ function describeDecision(d: Decision, s: AppState, viewerId: string): { headlin
   }
   if (d.kind === 'bids') {
     return {
-      headline: d.negotiations.length > 1 ? `${d.negotiations.length} buyers want your capacity.` : `${first(s.people[d.negotiations[0].buyerId]?.name)} bid on your capacity.`,
-      detail: `${d.title}. Compare total value and flexibility before you accept.`,
-      cta: 'Compare bids',
+      headline: d.negotiations.length > 1 ? `${d.negotiations.length} proposals for your capacity.` : `${first(s.people[d.negotiations[0].buyerId]?.name)} bid on your capacity.`,
+      detail: `${d.title}. Your agent has worked out how the hours could be allocated.`,
+      cta: 'Review allocations',
       route: { pathname: '/position/[id]', params: { id: d.offerId } },
     };
   }
@@ -75,8 +75,9 @@ export default function Home() {
 
       <View style={{ marginTop: space.xxl }}>
         {lead ? (
-          <>
-            <T v="display" testID="home-headline">{lead.headline}</T>
+          <View testID="decision-card" style={{ padding: space.lg, borderRadius: 16, backgroundColor: colors.raised, borderWidth: 1, borderColor: colors.rule }}>
+            <T v="label" color={colors.amberText}>Needs your decision</T>
+            <T v="display" style={{ marginTop: space.xs }} testID="home-headline">{lead.headline}</T>
             <T v="body" color={colors.inkDim} style={{ marginTop: space.sm }}>{lead.detail}</T>
             {leadView?.mine && leadView.theirs ? (
               <View style={{ marginTop: space.lg }}>
@@ -84,7 +85,7 @@ export default function Home() {
               </View>
             ) : null}
             <Button title={lead.cta} onPress={() => router.push(lead.route as never)} style={{ marginTop: space.lg, alignSelf: 'flex-start' }} />
-          </>
+          </View>
         ) : (
           <>
             <T v="display" testID="home-headline">{positions.length ? 'Your agent is watching the market.' : 'Nothing is waiting on you.'}</T>

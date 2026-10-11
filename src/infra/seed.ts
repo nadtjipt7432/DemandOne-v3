@@ -1,4 +1,4 @@
-import type { AppState, Category, MatchCard, Person } from '@/domain/types';
+import type { AppState, Category, Complexity, MatchCard, Person } from '@/domain/types';
 
 /**
  * The demo market a new account walks into: fictional counterparties and their
@@ -41,6 +41,7 @@ const counterparties: Person[] = [
   person({ id: 'lumen', name: 'Lumen Health', initials: 'LH', location: 'Bristol', completedCount: 0, recommendCount: 0, trustPaths: 0, bio: 'Seed-stage clinic-scheduling software.', categories: ['strategy'] }),
   person({ id: 'nova', name: 'Nova Robotics', initials: 'NR', location: 'Cambridge', completedCount: 2, recommendCount: 2, trustPaths: 0, bio: 'Warehouse robotics, preparing a Series B.', categories: ['finance'] }),
   person({ id: 'kite', name: 'Kite Labs', initials: 'KL', location: 'London', completedCount: 1, recommendCount: 1, trustPaths: 0, bio: 'Seed-stage B2B marketplace.', categories: ['finance'] }),
+  person({ id: 'northbridge', name: 'Northbridge Partners', initials: 'NP', location: 'London', completedCount: 12, recommendCount: 12, trustPaths: 1, bio: 'Mid-market private equity; portfolio of eight software companies.', categories: ['finance', 'ma-advisory'] }),
   person({ id: 'omar', name: 'Omar Haddad', initials: 'OH', location: 'Leeds', completedCount: 1, recommendCount: 1, trustPaths: 0, bio: 'Founder of a 12-person design studio.', categories: ['tax'] }),
 ];
 
@@ -215,6 +216,34 @@ const reservations: Record<string, number> = {
   c8: 8800,
   c9: 3300,
   c10: 1100,
+};
+
+/**
+ * Buyers with live demand for released capacity, by category. When someone
+ * releases hours, these are the bids that arrive. `rate` is the public bid
+ * for an ask of £150/hr (scaled to the actual ask); `limit` is the buyer's private
+ * maximum — engine-only, like `reservations`.
+ */
+export interface DemandBid {
+  buyerId: string;
+  summary: string;
+  hours: number;
+  week: number;
+  complexity: Complexity;
+  rate: number;
+  limit: number;
+}
+
+export const REFERENCE_ASK = 150;
+
+export const capacityDemand: Record<string, DemandBid[]> = {
+  finance: [
+    { buyerId: 'northbridge', summary: 'LBO model refresh for a portfolio company', hours: 8, week: 0, complexity: 'complex', rate: 140, limit: 150 },
+    { buyerId: 'halden', summary: 'Valuation cross-check before investment committee', hours: 6, week: 0, complexity: 'complex', rate: 160, limit: 170 },
+    { buyerId: 'nova', summary: 'Series B operating model support', hours: 10, week: 0, complexity: 'standard', rate: 125, limit: 128 },
+    { buyerId: 'kite', summary: 'Quarterly reforecast with Q3 actuals', hours: 4, week: 1, complexity: 'light', rate: 150, limit: 155 },
+    { buyerId: 'lumen', summary: 'Board-pack model clean-up', hours: 5, week: 1, complexity: 'light', rate: 135, limit: 142 },
+  ],
 };
 
 export const seedPeople: Record<string, Person> = Object.fromEntries(counterparties.map((p) => [p.id, p]));

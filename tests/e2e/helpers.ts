@@ -59,8 +59,17 @@ export async function tab(page: Page, name: 'Home' | 'Exchange' | 'Speak' | 'Dea
   await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
 }
 
-/** Open a listing by its title from the Exchange. */
+/** Exchange → expand a row in place → open its full listing. */
 export async function openListing(page: Page, title: RegExp) {
   await tab(page, 'Exchange');
-  await page.getByRole('button', { name: new RegExp(`^Offer: .*|^Need: .*`) }).filter({ hasText: title }).first().click();
+  await page.getByRole('button', { name: title }).first().click();
+  await expect(page.getByTestId('opportunity-card')).toBeVisible();
+  await page.getByTestId('opportunity-card').getByRole('button', { name: 'Full details' }).click();
+}
+
+/** Typed input goes through the same interpreter and agent as speech. */
+export async function say(page: Page, text: string) {
+  const box = page.getByRole('textbox', { name: 'Type to DemandOne' }).filter({ visible: true });
+  await box.fill(text);
+  await box.press('Enter');
 }

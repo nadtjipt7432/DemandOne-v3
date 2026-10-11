@@ -13,6 +13,11 @@ import type { AppState, Booking, BookingStatus, Person } from '@/domain/types';
  * explicit demo controls, so nothing advances on its own behind the user's back.
  */
 
+/** The value of agreed terms: rate × hours for hourly work, otherwise the price. */
+export function agreedTotal(terms: { price: number; hours?: number }): number {
+  return terms.hours ? terms.price * terms.hours : terms.price;
+}
+
 /** Create the shared transaction for an accepted negotiation. Sync — used inside state updaters. */
 export function createBookingFor(s: AppState, negotiationId: string): { state: AppState; bookingId: string } {
   const n = s.negotiations[negotiationId];
@@ -33,8 +38,10 @@ export function createBookingFor(s: AppState, negotiationId: string): { state: A
     buyerId: n.buyerId,
     sellerId: n.sellerId,
     terms: agreed.terms,
-    openingPrice: n.proposals[0].terms.price,
-    fees: computeFees(agreed.terms.price),
+    openingPrice: (n.proposals.find((p) => p.by === 'seller') ?? n.proposals[0]).terms.price,
+    openingBid: n.proposals.find((p) => p.by === 'buyer')?.terms.price,
+    total: agreedTotal(agreed.terms),
+    fees: computeFees(agreedTotal(agreed.terms)),
     // A simulated buyer pays at agreement (demo); a real buyer — the viewer — authorizes it themselves.
     status: buyerIsCounterparty ? 'paid' : 'agreed',
     payment: buyerIsCounterparty ? { methodLabel: 'Counterparty card (demo)', authorizedAt: nowIso(), demo: true } : undefined,
