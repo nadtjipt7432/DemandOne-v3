@@ -13,10 +13,12 @@ interface NativeRecognition {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
-  onresult: ((e: { results: { [i: number]: { [j: number]: { transcript: string } } } }) => void) | null;
-  onerror: (() => void) | null;
+  onresult: ((e: { resultIndex: number; results: { length: number; [i: number]: { isFinal: boolean; [j: number]: { transcript: string } } } }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
   start: () => void;
   stop: () => void;
+  abort: () => void;
 }
 
 function getNativeRecognition(): NativeRecognition | undefined {
@@ -26,7 +28,7 @@ function getNativeRecognition(): NativeRecognition | undefined {
   if (!Ctor) return undefined;
   const rec = new Ctor();
   rec.lang = 'en-GB';
-  rec.interimResults = false;
+  rec.interimResults = true;
   rec.continuous = false;
   return rec;
 }
@@ -35,17 +37,53 @@ export function isNativeSpeechAvailable(): boolean {
   return getNativeRecognition() !== undefined;
 }
 
+/** Why listening ended without a transcript. */
+export type ListenFailure = 'blocked' | 'no-speech' | 'no-microphone' | 'unsupported' | 'other';
+
+const FAILURE: Record<string, ListenFailure> = {
+  'not-allowed': 'blocked',
+  'service-not-allowed': 'blocked',
+  'no-speech': 'no-speech',
+  'audio-capture': 'no-microphone',
+  // Chromium forks without Google's speech service (Opera, Brave, Arc) report this.
+  network: 'unsupported',
+  'language-not-supported': 'unsupported',
+};
+
 /**
- * Starts the browser's native recognizer. Calls onResult once with the final
- * transcript, or onError if it's denied/fails. Returns a stop() handle, or
- * undefined immediately if nothing's available — callers should fall back to
- * `simulateTranscript` in that case.
+ * Starts the browser's native recognizer. Streams partial words to onInterim, then
+ * calls onResult once with the final transcript, or onError with the reason if it
+ * fails or ends without hearing anything. Returns a stop() handle (stopping early
+ * submits what was heard so far), or undefined if nothing's available — callers
+ * should fall back to typing or `simulateTranscript`.
  */
-export function startListening(onResult: (text: string) => void, onError: () => void): { stop: () => void } | undefined {
+export function startListening(onResult: (text: string) => void, onError: (why: ListenFailure) => void, onInterim?: (text: string) => void): { stop: () => void } | undefined {
   const rec = getNativeRecognition();
   if (!rec) return undefined;
-  rec.onresult = (e) => onResult(e.results[0]?.[0]?.transcript ?? '');
-  rec.onerror = () => onError();
+  let heard = '';
+  let settled = false;
+  const settle = (fn: () => void) => {
+    if (settled) return;
+    settled = true;
+    fn();
+  };
+  rec.onresult = (e) => {
+    let text = '';
+    let final = false;
+    for (let i = 0; i < e.results.length; i++) {
+      text += e.results[i][0]?.transcript ?? '';
+      final = e.results[i].isFinal;
+    }
+    heard = text.trim();
+    if (final) settle(() => onResult(heard));
+    else onInterim?.(heard);
+  };
+  rec.onerror = (e) => {
+    if (e.error === 'aborted') return;
+    settle(() => onError(FAILURE[e.error] ?? 'other'));
+  };
+  // The recognizer can end quietly (silence, or stopped by the user) — never leave the caller listening.
+  rec.onend = () => settle(() => (heard ? onResult(heard) : onError('no-speech')));
   try {
     rec.start();
   } catch {

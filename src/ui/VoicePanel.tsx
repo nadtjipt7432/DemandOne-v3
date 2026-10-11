@@ -15,12 +15,20 @@ import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, w
 import { formatMoney } from '@/domain/money';
 import { missingFields, type MandateDraft } from '@/domain/semantic';
 import { UNIT_SHORT } from '@/domain/terms';
-import { isNativeSpeechAvailable, startListening, stopSpeaking } from '@/infra/voice';
+import { isNativeSpeechAvailable, ListenFailure, startListening, stopSpeaking } from '@/infra/voice';
 import { cancelPending, confirmPending, handleUtterance, type AgentReply, type ScreenContext } from '@/services/voiceAgent';
 import { useVoiceSession } from '@/state/voiceSession';
 import { colors, radius, space, type } from '@/theme';
 import { Button, Row, T } from './core';
 import { Icon } from './Icon';
+
+const LISTEN_FAILURE: Record<ListenFailure, string> = {
+  blocked: 'Microphone access is blocked. Allow it from the icon at the left of the address bar, then tap the mic again.',
+  'no-speech': 'I didn’t hear anything. Tap the mic and start speaking, or type instead.',
+  'no-microphone': 'No microphone found. Connect one, or type instead.',
+  unsupported: 'This browser can’t turn speech into text. Use Chrome or Edge, or type instead.',
+  other: 'Listening stopped unexpectedly. Tap the mic to try again, or type instead.',
+};
 
 function MicButton({ listening, onPress, size }: { listening: boolean; onPress: () => void; size: number }) {
   const reduced = useReducedMotion();
@@ -110,20 +118,25 @@ export function VoicePanel({ context = { kind: 'none' }, variant = 'full', promp
       return;
     }
     if (!isNativeSpeechAvailable()) {
-      setNotice('Speech input isn’t available in this browser. Type instead, or try one of the examples.');
+      setNotice('This browser can’t turn speech into text. Use Chrome or Edge, or type instead.');
       return;
     }
     setListening(true);
+    setNotice(null);
     stopRef.current =
       startListening(
         (heard) => {
           setListening(false);
+          stopRef.current = null;
           void send(heard);
         },
-        () => {
+        (why) => {
           setListening(false);
-          setNotice('I couldn’t hear that. Check microphone permission, or type instead.');
-        }
+          stopRef.current = null;
+          setText('');
+          setNotice(LISTEN_FAILURE[why]);
+        },
+        setText
       ) ?? null;
     if (!stopRef.current) setListening(false);
   };
